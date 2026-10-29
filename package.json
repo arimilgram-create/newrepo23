@@ -1,0 +1,13 @@
+{
+  "name": "quad",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Canvas LMS power-ups (dark mode, to-do list, grades, GPA) as a bookmarklet. No browser extension needed.",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node scripts/test.mjs"
+  },
+  "devDependencies": {
+    "terser": "5.36.0"
+  }
+}
