@@ -1,0 +1,155 @@
+/* Styles Quad adds to Canvas pages. Everything is opt-in through classes on <html>. */
+
+/* Dark mode: invert the page, then flip media back so photos and videos look normal. */
+html.quad-dark {
+  filter: var(--quad-dark-filter) !important;
+  background: #fff !important;
+}
+html.quad-dark :is(img, video, picture, canvas, iframe, embed, object, [style*="background-image"],
+  .ic-DashboardCard__header_hero, .ic-DashboardCard__header_image, .ic-avatar, .fs-preview, .mejs-container) {
+  filter: invert(1) hue-rotate(180deg) !important;
+}
+html.quad-dark :is(picture, [style*="background-image"], .ic-avatar, .ic-DashboardCard__header_hero,
+  .ic-DashboardCard__header_image, .mejs-container)
+  :is(img, video, picture, canvas, [style*="background-image"], .ic-DashboardCard__header_hero) {
+  filter: none !important;
+}
+
+/* Theme colors */
+html.quad-nav {
+  --ic-brand-global-nav-bgd: var(--quad-nav) !important;
+  --ic-brand-global-nav-ic-icon-svg-fill: var(--quad-nav-fg) !important;
+  --ic-brand-global-nav-menu-item__text-color: var(--quad-nav-fg) !important;
+  --ic-brand-global-nav-avatar-border: var(--quad-nav-fg) !important;
+  --ic-brand-global-nav-logo-bgd: var(--quad-nav) !important;
+}
+html.quad-nav .ic-app-header,
+html.quad-nav .ic-app-header__logomark-container {
+  background: var(--quad-nav) !important;
+}
+html.quad-nav .ic-app-header__menu-list-item:not(.ic-app-header__menu-list-item--active) :is(.menu-item__text, .ic-icon-svg, svg) {
+  color: var(--quad-nav-fg) !important;
+  fill: var(--quad-nav-fg) !important;
+}
+html.quad-accent {
+  --ic-brand-primary: var(--quad-accent) !important;
+  --ic-brand-button--primary-bgd: var(--quad-accent) !important;
+  --ic-link-color: var(--quad-accent) !important;
+  --ic-brand-global-nav-ic-icon-svg-fill--active: var(--quad-accent) !important;
+  --ic-brand-global-nav-menu-item__text-color--active: var(--quad-accent) !important;
+}
+html.quad-accent :is(.btn-primary, .Button--primary, .ic-Button--primary) {
+  background: var(--quad-accent) !important;
+  border-color: var(--quad-accent) !important;
+  color: var(--quad-accent-fg) !important;
+}
+html.quad-accent .ic-app-header__menu-list-item--active :is(.menu-item__text, .ic-icon-svg, svg) {
+  color: var(--quad-accent) !important;
+  fill: var(--quad-accent) !important;
+}
+
+/* Font */
+html.quad-font body,
+html.quad-font body :not(code, pre, kbd, samp, .MathJax, .MathJax *, [class*="icon-"], [class^="icon-"]) {
+  font-family: var(--quad-font) !important;
+}
+
+/* Layout */
+html.quad-full :is(.ic-Layout-wrapper, .ic-Layout-contentWrapper, #content-wrapper, #main, .ic-Layout-columns) {
+  max-width: none !important;
+}
+html.quad-nologo .ic-app-header__logomark-container {
+  display: none !important;
+}
+html.quad-nofeedback :is(.Sidebar__RecentFeedbackContainer, .recent_feedback, #right-side .events_list.recent_feedback) {
+  display: none !important;
+}
+html.quad-bettertodo :is(.Sidebar__TodoListContainer, #right-side .todo-list-header, #right-side .to-do-list, #right-side .coming_up) {
+  display: none !important;
+}
+
+/* Dashboard cards */
+html.quad-solid .ic-DashboardCard__header_image {
+  background-image: none !important;
+}
+html.quad-solid .ic-DashboardCard__header_hero {
+  opacity: 1 !important;
+}
+html.quad-condensed :is(.ic-DashboardCard__header_hero, .ic-DashboardCard__header_image, .ic-DashboardCard__header) {
+  height: 76px !important;
+  min-height: 0 !important;
+}
+html.quad-condensed .ic-DashboardCard__header_content {
+  padding: 8px 12px !important;
+}
+html.quad-condensed .ic-DashboardCard__header-subtitle,
+html.quad-condensed .ic-DashboardCard__header-term {
+  display: none !important;
+}
+html.quad-radius .ic-DashboardCard {
+  border-radius: var(--quad-radius) !important;
+  overflow: hidden !important;
+}
+
+.quad-rel {
+  position: relative !important;
+}
+.quad-grade {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 2;
+  pointer-events: none;
+  background: rgba(255, 255, 255, 0.95);
+  color: #1f2328;
+  border-radius: 999px;
+  font: 600 12px/1 system-ui, -apple-system, "Segoe UI", sans-serif;
+  padding: 5px 9px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+html.quad-dark .quad-grade {
+  filter: invert(1) hue-rotate(180deg);
+}
+.quad-card-list {
+  list-style: none !important;
+  margin: 0 !important;
+  padding: 6px 14px 8px !important;
+  border-top: 1px solid #e6e8eb;
+  font-size: 13px;
+  line-height: 1.35;
+}
+.quad-card-list li {
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 3px 0;
+  margin: 0;
+}
+.quad-card-list a {
+  color: #273540 !important;
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.quad-card-list a:hover {
+  text-decoration: underline;
+}
+.quad-card-list .quad-due {
+  color: #66717b;
+  font-size: 12px;
+  flex: none;
+}
+.quad-card-list .quad-late .quad-due {
+  color: #c4321b;
+  font-weight: 600;
+}
+.quad-card-list .quad-none {
+  color: #66717b;
+}
+.quad-embed {
+  display: block;
+  margin: 0 0 18px;
+}

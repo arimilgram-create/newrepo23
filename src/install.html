@@ -85,11 +85,6 @@
   /* features + preview */
   .split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 380px); gap: 40px; align-items: start; margin-top: 24px; }
   @media (max-width: 820px) { .split { grid-template-columns: minmax(0, 1fr); } }
-  .features { display: grid; gap: 22px; }
-  .feature { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 4px 14px; }
-  .feature .ic { grid-row: span 2; width: 36px; height: 36px; border-radius: 10px; background: var(--surface); border: 1px solid var(--line); display: grid; place-items: center; color: var(--lawn); }
-  .feature .ic svg { width: 18px; height: 18px; }
-  .feature p { color: var(--muted); font-size: 15px; }
 
   .preview { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 16px); }
   .preview-label { font-size: 12px; color: var(--muted); margin-bottom: 8px; display: flex; justify-content: space-between; }
@@ -118,6 +113,34 @@
   .qp-stat { background: var(--paper); border-radius: 10px; padding: 10px 12px; }
   .qp-stat b { display: block; font: 800 28px/1.1 var(--display); font-variant-numeric: tabular-nums; }
   .qp-stat span { font-size: 12px; color: var(--muted); }
+  .qp-timer { margin: 14px 16px 8px; background: var(--paper); border-radius: 12px; padding: 16px; display: grid; justify-items: center; gap: 2px; }
+  .qp-timer span { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--lawn); }
+  .qp-timer b { font: 800 44px/1.05 var(--display); font-variant-numeric: tabular-nums; }
+  .qp-timer small { color: var(--muted); font-size: 12px; }
+  .qp-final { margin: 0 16px; padding: 10px 12px; border-radius: 10px; background: var(--paper); font-size: 13px; color: var(--muted); }
+  .qp-final b { color: var(--lawn); }
+
+  /* feature groups */
+  .groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 28px 32px; }
+  .fgroup { display: grid; gap: 10px; align-content: start; }
+  .fgroup h3 { display: flex; align-items: center; gap: 10px; }
+  .fgroup h3 .ic { width: 32px; height: 32px; border-radius: 9px; background: var(--surface); border: 1px solid var(--line); display: grid; place-items: center; color: var(--lawn); flex: none; }
+  .fgroup h3 .ic svg { width: 17px; height: 17px; }
+  .fgroup ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  .fgroup li { color: var(--muted); font-size: 15px; padding-left: 18px; position: relative; }
+  .fgroup li::before { content: ""; position: absolute; left: 2px; top: .62em; width: 6px; height: 6px; border-radius: 2px; background: var(--lawn); }
+  .fgroup li b { color: var(--ink); font-weight: 600; }
+  .new { font: 700 10px/1 var(--body); text-transform: uppercase; letter-spacing: .08em; color: var(--chalk-ink); background: var(--chalk); border-radius: 4px; padding: 3px 5px; margin-left: 4px; vertical-align: 2px; }
+
+  /* comparison */
+  .table-wrap { overflow-x: auto; margin-top: 24px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; min-width: 520px; font-size: 15px; }
+  th, td { text-align: left; padding: 12px 16px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tr:last-child td { border-bottom: 0; }
+  thead th { font: 600 12px/1.2 var(--body); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  td:first-child { color: var(--ink); font-weight: 600; width: 38%; }
+  td { color: var(--muted); }
+  .yes { color: var(--lawn); font-weight: 700; }
 
   /* fine print */
   .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 28px; margin-top: 24px; }
@@ -139,12 +162,12 @@
 
 <div class="wrap">
   <header class="hero">
-    <div class="eyebrow">For students on Canvas</div>
+    <div class="eyebrow">For students on Canvas · Version 2</div>
     <h1>Quad. Canvas, upgraded.<br><span>No extension.</span></h1>
     <p class="lede">
-      Dark mode, a real to-do list, grades on your dashboard cards and a GPA calculator.
-      Quad lives in <b>a bookmark</b>, so it works on school laptops that block Chrome extensions,
-      and in any browser that has a bookmarks bar.
+      Themes, dark mode, grades and due dates on your course cards, a to-do list that syncs with Canvas,
+      a GPA calculator, <kbd>Ctrl</kbd> <kbd>K</kbd> search and a study timer.
+      Quad lives in <b>a bookmark</b>, so it works on school laptops that block Chrome extensions.
     </p>
     <div class="install">
       <a class="bm" id="bookmarklet" href="{{BOOKMARKLET}}" title="Drag me to your bookmarks bar" draggable="true">
@@ -176,32 +199,59 @@
         <h3>Open Canvas and click it</h3>
         <p>Go to your Canvas dashboard and click <b>Quad</b> in the bar. The panel opens on the right. Click again to hide it.</p>
       </li>
+      <li>
+        <div class="num">4</div>
+        <h3>Turn on “Stay on”</h3>
+        <p>In <b>Settings › More</b>, switch on <b>Stay on while I browse</b>. Quad then keeps running as you move around Canvas, like an extension would.</p>
+      </li>
     </ol>
   </section>
 
   <section aria-labelledby="what">
     <h2 id="what">What you get</h2>
     <div class="split">
-      <div class="features">
-        <div class="feature">
-          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div>
-          <h3>To-do list</h3>
-          <p>Everything due in the next 7, 14 or 30 days, grouped by day, with overdue work pinned to the top. Check items off and they're marked done in your Canvas planner too.</p>
+      <div class="groups">
+        <div class="fgroup">
+          <h3><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="13.5" cy="6.5" r="1.5"/><circle cx="17.5" cy="10.5" r="1.5"/><circle cx="8.5" cy="7.5" r="1.5"/><circle cx="6.5" cy="12.5" r="1.5"/><path d="M12 2a10 10 0 1 0 0 20c1 0 1.7-.8 1.7-1.7 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-.9.8-1.7 1.7-1.7H16a6 6 0 0 0 6-6c0-4.4-4.5-8.2-10-8.2z"/></svg></span>Make Canvas yours</h3>
+          <ul>
+            <li><b>12 themes</b> that restyle the sidebar, buttons and fonts in one click</li>
+            <li><b>Dark mode</b>: always on, matching your device, or on a schedule, in three darkness levels</li>
+            <li><b>Card palettes</b> that recolor every course at once, saved to your Canvas account</li>
+            <li><b>Card styles</b>: pictures, solid colors or gradients, compact cards and rounded corners</li>
+            <li><b>Your own card pictures</b> and <b>course nicknames</b></li>
+            <li><b>11 fonts</b>, including Atkinson Hyperlegible for easier reading</li>
+          </ul>
         </div>
-        <div class="feature">
-          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></div>
-          <h3>Grades at a glance</h3>
-          <p>Your current score and letter for every class in one list, and a badge with your grade on each dashboard card.</p>
+        <div class="fgroup">
+          <h3><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>Never miss work</h3>
+          <ul>
+            <li><b>To-do list</b> grouped by day with overdue work on top. Checking things off syncs with the Canvas planner</li>
+            <li><b>What's due next</b> listed on every course card</li>
+            <li><b>Quad's to-do in the dashboard sidebar</b>, replacing Canvas's</li>
+            <li><b>Add your own to-dos</b>. They show up in the Canvas app too</li>
+            <li><b>Reminders</b> for work due soon, plus optional desktop notifications</li>
+            <li><b>Calendar export</b> to Google Calendar, Apple Calendar or Outlook</li>
+          </ul>
         </div>
-        <div class="feature">
-          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M8 6h8M8 11h2M14 11h2M8 15h2M14 15h2M8 19h8"/></svg></div>
-          <h3>GPA calculator</h3>
-          <p>Weighted and unweighted GPA on a 4.0 scale from your live grades. Set credits per class and mark Honors (+0.5) or AP/IB (+1.0).</p>
+        <div class="fgroup">
+          <h3><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></span>Know where you stand</h3>
+          <ul>
+            <li><b>Grades on every card</b> and all your classes in one list</li>
+            <li><b>Grade-change alerts</b> showing what moved since you last looked</li>
+            <li><b>GPA calculator</b>: weighted, unweighted and cumulative, three grading scales, credits and Honors/AP levels</li>
+            <li><b>What-if grades</b> to see how a B would change your GPA</li>
+            <li><b>Final exam calculator</b>: the score you need to keep your grade</li>
+          </ul>
         </div>
-        <div class="feature">
-          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></div>
-          <h3>Dark mode and cleaner cards</h3>
-          <p>Darken all of Canvas, and swap card photos for solid course colors if you like a calmer dashboard.</p>
+        <div class="fgroup">
+          <h3><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg></span>Move faster <span class="new">Extras</span></h3>
+          <ul>
+            <li><b><kbd>Ctrl</kbd> <kbd>K</kbd> search</b> to jump to any course page or assignment from anywhere</li>
+            <li><b>Study timer</b> with focus and break sessions</li>
+            <li><b>Notes</b> in the panel or on your dashboard</li>
+            <li><b>Stay on</b> mode, so one click covers your whole visit</li>
+            <li><b>Backup</b> to copy your setup to another computer</li>
+          </ul>
         </div>
       </div>
 
@@ -213,6 +263,7 @@
             <button class="qp-tab" role="tab" id="t-todo" data-view="todo" aria-selected="true">To-do</button>
             <button class="qp-tab" role="tab" id="t-grades" data-view="grades" aria-selected="false">Grades</button>
             <button class="qp-tab" role="tab" id="t-gpa" data-view="gpa" aria-selected="false">GPA</button>
+            <button class="qp-tab" role="tab" id="t-tools" data-view="tools" aria-selected="false">Tools</button>
           </div>
           <div class="qp-body">
             <div data-pane="todo">
@@ -242,9 +293,29 @@
               <div class="qp-course"><b>Intro to Literature</b><span class="qp-meta">A · 4.0 · Regular</span></div>
               <div class="qp-course"><b>Modern World History</b><span class="qp-meta">B+ · 3.3 · Regular</span></div>
             </div>
+            <div data-pane="tools" hidden>
+              <div class="qp-timer"><span>Focus</span><b>18:42</b><small>2 focus sessions today</small></div>
+              <div class="qp-final">Chemistry: you need <b>78.5%</b> on the final to keep a B.</div>
+            </div>
           </div>
         </div>
       </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="compare">
+    <h2 id="compare">Bookmark or extension?</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th scope="col"></th><th scope="col">Quad (bookmark)</th><th scope="col">A browser extension</th></tr></thead>
+        <tbody>
+          <tr><td>Works when your school blocks extensions</td><td class="yes">Yes</td><td>No</td></tr>
+          <tr><td>Install</td><td>Drag one button</td><td>Web store, permissions prompt</td></tr>
+          <tr><td>Starts on its own</td><td>One click per tab, then Stay on keeps it running</td><td>Yes</td></tr>
+          <tr><td>Can read other websites you visit</td><td class="yes">No, only your Canvas tab</td><td>Depends on its permissions</td></tr>
+          <tr><td>Where your data goes</td><td class="yes">Only to your school’s Canvas</td><td>Depends on the extension</td></tr>
+        </tbody>
+      </table>
     </div>
   </section>
 
@@ -255,7 +326,8 @@
         <h3>A bookmark, not an extension</h3>
         <p>Extensions can run on every page by themselves. A bookmark only runs when you click it, so:</p>
         <ul>
-          <li>Click Quad once after opening a Canvas page to bring back dark mode and card grades.</li>
+          <li>Click Quad once per tab. With <b>Stay on</b> switched on, it keeps running as you click around Canvas.</li>
+          <li>Reloading the page or opening a new tab turns it off until you click again.</li>
           <li>Your settings are remembered in this browser, separately for each Canvas site.</li>
           <li>Some school-managed Chromebooks block bookmarklets too. If clicking does nothing, that's the reason.</li>
         </ul>
@@ -265,7 +337,7 @@
         <ul>
           <li>Quad runs inside your own Canvas tab and only talks to your Canvas site, using your normal login.</li>
           <li>No accounts, no servers, no tracking. Nothing about your grades leaves your browser.</li>
-          <li>It reads your courses, grades and planner, and the only thing it changes is the "done" check on planner items.</li>
+          <li>It reads your courses, grades and planner. It only changes things in Canvas when you ask: checking off or adding to-dos, course colors and nicknames.</li>
         </ul>
       </div>
       <div class="codebox">

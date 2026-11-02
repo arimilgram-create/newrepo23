@@ -1,12 +1,35 @@
 # Quad
 
-Canvas LMS power-ups for students, delivered as a **bookmarklet** so no browser extension is needed.
+Canvas LMS power-ups for students, delivered as a **bookmarklet**, so no browser extension is needed.
 It works on school laptops that block extensions, and in any browser with a bookmarks bar.
 
-- **To-do list**: everything due in the next 7/14/30 days, grouped by day, overdue work first. Checking an item off marks it done in your Canvas planner.
-- **Grades**: current score and letter for each class, plus a grade badge on every dashboard card.
-- **GPA calculator**: weighted and unweighted, 4.0 scale, with per-class credits and Honors/AP levels.
-- **Dark mode** and an option to hide dashboard card images.
+## Features
+
+**Make Canvas yours**
+- 12 one-click themes (sidebar color, accent color, font, optional card palette)
+- Dark mode: on, match device, or scheduled; Dim / Dark / Black levels
+- Course card palettes saved to your Canvas account; per-course colors and nicknames
+- Card styles (pictures, solid, gradient), custom card pictures, compact cards, corner rounding
+- 11 fonts, full-width layout, hide the school logo and "Recent Feedback"
+
+**Never miss work**
+- To-do list grouped by day, overdue first, with a course filter; checking items off syncs with the Canvas planner
+- Upcoming work listed on each dashboard card
+- Quad's to-do (and optional notes) in the dashboard sidebar, replacing Canvas's
+- Add and delete your own to-dos (Canvas planner notes)
+- Due-soon reminders and desktop notifications
+- `.ics` export for Google Calendar, Apple Calendar or Outlook
+
+**Know where you stand**
+- Grades on every card and in a list, with changes since you last looked
+- GPA: unweighted, weighted and cumulative; three scales; credits, Honors/AP levels and what-if grades
+- Final exam calculator
+
+**Move faster**
+- `Ctrl/Cmd + K` search for any course page, assignment or Quad action; `Alt + Q` toggles the panel
+- Study timer (focus/break sessions)
+- **Stay on** mode: Canvas runs in a full-window frame under Quad so it keeps working as you browse
+- Settings backup and restore
 
 ## Install
 
@@ -19,21 +42,34 @@ Can't drag? Copy the contents of `dist/bookmarklet.txt`, create a new bookmark, 
 
 ## How it works
 
-Quad runs inside your Canvas tab and calls the Canvas REST API on the same site with your existing login
-(`/api/v1/courses`, `/api/v1/planner/items`, `/api/v1/users/self/colors`, and `/api/v1/planner/overrides` to mark items done).
+Quad runs inside your Canvas tab and calls the Canvas REST API on the same site with your existing login.
 It has no server and sends nothing anywhere else. Settings are kept in `localStorage` for that Canvas site.
 
-Because a bookmarklet only runs when clicked, you need to click it once per page load to re-apply dark mode and card grades.
-Some managed Chromebooks block `javascript:` bookmarks as well.
+| Feature | Canvas API |
+| --- | --- |
+| Courses, grades, nicknames | `GET /api/v1/courses`, `PUT/DELETE /api/v1/users/self/course_nicknames/:id` |
+| Course colors | `GET /api/v1/users/self/colors`, `PUT /api/v1/users/self/colors/course_:id` |
+| To-do | `GET /api/v1/planner/items`, `POST/PUT /api/v1/planner/overrides`, `POST/DELETE /api/v1/planner_notes` |
+
+A bookmarklet only runs when clicked. Without Stay on, click it once per page load. Some managed Chromebooks block
+`javascript:` bookmarks as well.
 
 ## Develop
 
 ```bash
 npm install
-npm run build   # minifies src/quad.js, writes dist/ and index.html
-npm test        # runs the bookmarklet against a mocked Canvas page in headless Chromium
+npm run build   # bundles src/ with esbuild into dist/ and writes index.html
+npm test        # unit tests + end-to-end run against a mocked Canvas in headless Chromium
 ```
 
-Source lives in `src/quad.js` (the bookmarklet) and `src/install.html` (the install page template).
+| Path | What it is |
+| --- | --- |
+| `src/main.js` | Entry point |
+| `src/page.js`, `src/styles/page.css` | Changes to Canvas pages: theme, dark mode, cards, sidebar |
+| `src/panel.js`, `src/views.js`, `src/actions.js`, `src/styles/panel.css` | The Quad panel |
+| `src/data.js`, `src/api.js` | Canvas API calls and derived data |
+| `src/gpa.js` | Grade and GPA math |
+| `src/palette.js`, `src/timer.js`, `src/reminders.js`, `src/stayon.js` | Search, timer, reminders, stay-on mode |
+| `src/install.html` | Install page template |
 
 Quad is an independent tool and is not affiliated with Instructure.
