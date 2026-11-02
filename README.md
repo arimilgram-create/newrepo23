@@ -56,7 +56,7 @@ and pick the folder. It runs on `*.instructure.com`; for a custom Canvas address
 
 When you click the bookmark, Homeroom stops Canvas's timers, replaces the page (which drops Canvas's listeners)
 and draws Homeroom instead, moving between pages with the History API. The extension does the same before Canvas's
-scripts ever run. Both use using the Canvas REST API with your existing login. Nothing is sent anywhere except your school's Canvas.
+scripts ever run. Both use the Canvas REST API with your existing login. Nothing is sent anywhere except your school's Canvas.
 
 | Data | Canvas API |
 | --- | --- |
