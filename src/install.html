@@ -1,0 +1,258 @@
+<title>Homeroom for Canvas</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: one centered column. Hero with the drag button and a framed screenshot, then setup steps, features beside screenshots, and how the bookmark behaves. */
+  :root {
+    --paper: #f5f8f6;
+    --surface: #ffffff;
+    --ink: #15201a;
+    --muted: #56625b;
+    --line: #dbe3de;
+    --brand: #0b8043;
+    --brand-ink: #ffffff;
+    --sun: #fbbc04;
+    --sun-ink: #2a2000;
+    --display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+    --body: "Figtree", "Segoe UI", system-ui, -apple-system, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #0f1512; --surface: #18201b; --ink: #e5ece7; --muted: #9ba7a0; --line: #2a352e;
+      --brand: #3fb871; --brand-ink: #06140c; --sun: #fbbc04; --sun-ink: #2a2000;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #0f1512; --surface: #18201b; --ink: #e5ece7; --muted: #9ba7a0; --line: #2a352e;
+    --brand: #3fb871; --brand-ink: #06140c; --sun: #fbbc04; --sun-ink: #2a2000;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--paper); color: var(--ink);
+    font: 16px/1.55 var(--body);
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 0 64px;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+  h1, h2, h3 { font-family: var(--display); text-wrap: balance; margin: 0; letter-spacing: -.02em; }
+  h2 { font-size: clamp(24px, 3.4vw, 32px); font-weight: 700; }
+  h3 { font-size: 18px; font-weight: 700; letter-spacing: -.01em; }
+  p { margin: 0; }
+  a { color: var(--brand); }
+  :focus-visible { outline: 3px solid var(--brand); outline-offset: 3px; border-radius: 6px; }
+  kbd { font: 500 .85em var(--mono); background: var(--surface); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; padding: 1px 6px; white-space: nowrap; }
+  .eyebrow { font: 600 12px/1 var(--body); text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
+
+  /* hero */
+  .hero { display: grid; gap: 24px; padding-block: 56px 32px; }
+  .brandline { display: flex; align-items: center; gap: 16px; }
+  .brandline svg { width: clamp(52px, 8vw, 76px); height: auto; flex: none; }
+  .hero h1 { font-size: clamp(48px, 9vw, 96px); font-weight: 800; line-height: .95; }
+  .tagline { font: 700 clamp(22px, 3.2vw, 32px)/1.15 var(--display); letter-spacing: -.02em; color: var(--brand); }
+  .lede { font-size: clamp(17px, 2vw, 19px); max-width: 40em; color: var(--muted); }
+  .lede b { color: var(--ink); font-weight: 600; }
+  .install { display: flex; flex-wrap: wrap; align-items: center; gap: 16px 24px; }
+  .bm {
+    display: inline-flex; align-items: center; gap: 10px; cursor: grab;
+    background: var(--sun); color: var(--sun-ink); text-decoration: none;
+    font: 800 22px/1 var(--display); letter-spacing: -.01em;
+    padding: 14px 24px 14px 14px; border-radius: 14px;
+    box-shadow: 0 2px 0 rgba(0,0,0,.18), 0 12px 28px -12px rgba(140,100,0,.6);
+    transform: rotate(-1.5deg); transition: transform .15s ease;
+  }
+  .bm:hover { transform: rotate(0) translateY(-2px); }
+  .bm:active { cursor: grabbing; }
+  .bm svg { width: 30px; height: 30px; flex: none; }
+  .drag-hint { display: grid; gap: 2px; }
+  .drag-hint strong { font-weight: 700; }
+  .drag-hint span { color: var(--muted); font-size: 14px; }
+
+  .frame { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--surface); box-shadow: 0 30px 60px -30px rgba(10,40,25,.35); }
+  .frame-bar { display: flex; align-items: center; gap: 6px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+  .frame-bar i { width: 10px; height: 10px; border-radius: 50%; background: var(--line); }
+  .frame-bar span { margin-left: 10px; font: 12px var(--mono); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .frame img { display: block; width: 100%; height: auto; max-width: 100%; }
+  .caption { font-size: 13px; color: var(--muted); margin-top: 10px; }
+
+  /* sections */
+  section { padding-block: 44px; border-top: 1px solid var(--line); }
+  .steps { list-style: none; padding: 0; margin: 24px 0 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+  .steps li { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px; display: grid; gap: 8px; align-content: start; }
+  .num { font: 800 15px/1 var(--display); width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--brand); color: var(--brand-ink); }
+  .steps p { color: var(--muted); font-size: 15px; }
+
+  .split { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 40px; align-items: start; margin-top: 28px; }
+  @media (max-width: 860px) { .split { grid-template-columns: minmax(0, 1fr); } }
+  .features { list-style: none; margin: 0; padding: 0; display: grid; gap: 16px; }
+  .features li { display: grid; gap: 2px; padding-left: 20px; position: relative; color: var(--muted); font-size: 15px; }
+  .features li::before { content: ""; position: absolute; left: 2px; top: .55em; width: 8px; height: 8px; border-radius: 3px; background: var(--brand); }
+  .features b { color: var(--ink); font-weight: 700; font-size: 16px; }
+  .shots { display: grid; gap: 20px; }
+
+  .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 28px; margin-top: 24px; }
+  .cols > div { display: grid; gap: 10px; align-content: start; }
+  .cols p, .cols li { color: var(--muted); font-size: 15px; }
+  .cols ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
+  .codebox textarea {
+    width: 100%; height: 110px; resize: vertical; font: 12px/1.45 var(--mono); color: var(--ink);
+    background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; word-break: break-all;
+  }
+  .btn { font: 600 14px var(--body); color: var(--brand-ink); background: var(--brand); border: 0; border-radius: 9px; padding: 10px 16px; cursor: pointer; justify-self: start; }
+  .btn:hover { filter: brightness(1.08); }
+  .copied { font-size: 13px; color: var(--muted); }
+  footer { padding-top: 32px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+
+  @media (prefers-reduced-motion: reduce) { .bm, .bm:hover { transition: none; transform: none; } }
+</style>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">For students on Canvas · No extension needed</div>
+    <div class="brandline">
+      <svg viewBox="0 0 32 32" aria-hidden="true">
+        <rect width="32" height="32" rx="8" fill="#0b8043"/>
+        <path d="M7 24V12.5L16 6l9 6.5V24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linejoin="round"/>
+        <rect x="12.2" y="15" width="7.6" height="9" rx="1.2" fill="#fff"/>
+        <circle cx="16" cy="11.4" r="1.6" fill="#fbbc04"/>
+      </svg>
+      <h1>Homeroom</h1>
+    </div>
+    <p class="tagline">Canvas, redrawn as a clean classroom.</p>
+    <p class="lede">
+      Class cards, a Stream, Classwork by topic, a To-do list and a Calendar, all built from your real Canvas classes.
+      Turn in work and message your teacher without leaving it.
+      It lives in <b>a bookmark</b>, so it works on school laptops that block extensions.
+    </p>
+    <div class="install">
+      <a class="bm" id="bookmarklet" href="{{BOOKMARKLET}}" title="Drag me to your bookmarks bar" draggable="true">
+        <svg viewBox="0 0 32 32" aria-hidden="true">
+          <rect width="32" height="32" rx="8" fill="#0b8043"/>
+          <path d="M7 24V12.5L16 6l9 6.5V24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linejoin="round"/>
+          <rect x="12.2" y="15" width="7.6" height="9" rx="1.2" fill="#fff"/>
+          <circle cx="16" cy="11.4" r="1.6" fill="#fbbc04"/>
+        </svg>
+        Homeroom
+      </a>
+      <div class="drag-hint">
+        <strong id="hint">Drag this button onto your bookmarks bar.</strong>
+        <span>Don’t click it here. It only works on a Canvas page.</span>
+      </div>
+    </div>
+    <figure class="frame" style="margin:8px 0 0">
+      <div class="frame-bar"><i></i><i></i><i></i><span>yourschool.instructure.com</span></div>
+      <img src="{{IMG_HOME}}" alt="Homeroom home page: three class cards with colored banners, teacher initials and what's due next" width="1280" height="860">
+    </figure>
+    <p class="caption">Homeroom on a test Canvas site with example classes.</p>
+  </header>
+
+  <section aria-labelledby="how">
+    <h2 id="how">Set it up in a minute</h2>
+    <ol class="steps">
+      <li>
+        <div class="num">1</div>
+        <h3>Show your bookmarks bar</h3>
+        <p>Press <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>B</kbd> on Windows or a Chromebook, or <kbd>⌘</kbd> <kbd>Shift</kbd> <kbd>B</kbd> on a Mac.</p>
+      </li>
+      <li>
+        <div class="num">2</div>
+        <h3>Drag Homeroom onto it</h3>
+        <p>Grab the yellow button above and drop it on the bar. If that doesn’t work, use the copy option at the bottom of this page.</p>
+      </li>
+      <li>
+        <div class="num">3</div>
+        <h3>Open Canvas and click it</h3>
+        <p>On any Canvas page, click <b>Homeroom</b> in the bar. Canvas turns into Homeroom right there in the tab.</p>
+      </li>
+    </ol>
+  </section>
+
+  <section aria-labelledby="what">
+    <h2 id="what">What’s inside</h2>
+    <div class="split">
+      <ul class="features">
+        <li><b>Class cards</b>Every class on your dashboard with its own banner art, teacher and what’s due next. Change a class’s color from the card menu.</li>
+        <li><b>Stream</b>Announcements and new assignments, newest first, with an Upcoming box.</li>
+        <li><b>Classwork</b>Your modules laid out as topics. Click any item to see when it’s due, its status and a preview.</li>
+        <li><b>Turn in work</b>Attach a file, a link or typed text and hit Turn in. Mark reading-type work as done.</li>
+        <li><b>Private comments</b>Message your teacher right on the assignment.</li>
+        <li><b>To-do</b>Assigned, Missing and Done across all your classes, grouped by week.</li>
+        <li><b>Calendar</b>A week view of everything due, colored by class.</li>
+        <li><b>People and Grades</b>Your teachers and classmates, plus every assignment’s score and your overall grade.</li>
+        <li><b>Light and dark</b>Switch from the account menu. Works on phones too.</li>
+      </ul>
+      <div class="shots">
+        <figure class="frame" style="margin:0">
+          <div class="frame-bar"><i></i><i></i><i></i><span>Classwork</span></div>
+          <img src="{{IMG_CLASSWORK}}" alt="Classwork page with topics on the left and assignments listed under unit headings" width="1280" height="860" loading="lazy">
+        </figure>
+        <figure class="frame" style="margin:0">
+          <div class="frame-bar"><i></i><i></i><i></i><span>Assignment</span></div>
+          <img src="{{IMG_ASSIGNMENT}}" alt="Assignment page with instructions on the left and a Your work card with Add or create and private comments on the right" width="1280" height="860" loading="lazy">
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="limits">
+    <h2 id="limits">Good to know</h2>
+    <div class="cols">
+      <div>
+        <h3>How the bookmark behaves</h3>
+        <ul>
+          <li>Moving around Homeroom stays in Homeroom, and the back button works.</li>
+          <li>Things Homeroom doesn’t redo, like quizzes, discussions and files, open in a new tab of regular Canvas, so Homeroom stays open.</li>
+          <li>Reloading the page brings regular Canvas back. Click the bookmark again to return to Homeroom.</li>
+          <li>Clicking the bookmark while Homeroom is open switches back to regular Canvas.</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Private by design</h3>
+        <ul>
+          <li>Runs only in your Canvas tab and only talks to your school’s Canvas, using your normal login.</li>
+          <li>No accounts, no servers, no tracking.</li>
+          <li>It only changes things in Canvas when you do: turning in work, comments, “mark as done” and class colors.</li>
+          <li>Some school-managed Chromebooks block bookmarks like this too. If clicking does nothing, that’s why.</li>
+        </ul>
+      </div>
+      <div class="codebox" style="display:grid;gap:10px">
+        <h3>Can’t drag? Add it by hand</h3>
+        <p>Copy the code below, create a new bookmark named <b>Homeroom</b>, and paste the code in as its URL.</p>
+        <textarea id="code" readonly aria-label="Homeroom bookmark code">{{BOOKMARKLET_TEXT}}</textarea>
+        <button class="btn" id="copy" type="button">Copy bookmark code</button>
+        <span class="copied" id="copied" aria-live="polite"></span>
+      </div>
+    </div>
+  </section>
+
+  <footer>Homeroom is an independent student tool. It isn’t made by or affiliated with Instructure (the makers of Canvas) or Google.</footer>
+</div>
+
+<script>
+  (() => {
+    document.getElementById('bookmarklet').addEventListener('click', (e) => {
+      e.preventDefault();
+      document.getElementById('hint').textContent = 'Drag it to your bookmarks bar instead, then click it on Canvas.';
+    });
+    const code = document.getElementById('code');
+    const status = document.getElementById('copied');
+    document.getElementById('copy').addEventListener('click', () => {
+      const fallback = () => {
+        code.focus();
+        code.select();
+        status.textContent = 'Selected. Press Ctrl+C (or ⌘C) to copy.';
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(code.value).then(() => { status.textContent = 'Copied. Paste it as the URL of a new bookmark.'; }, fallback);
+      } else {
+        fallback();
+      }
+    });
+  })();
+</script>

@@ -1,6 +1,6 @@
 # Homeroom
 
-A Chrome extension that gives Canvas a clean, card-based classroom layout: class cards, a Stream,
+A bookmark (or, optionally, a Chrome extension) that gives Canvas a clean, card-based classroom layout: class cards, a Stream,
 Classwork organized by topic, People, a To-do list and a Calendar. Your classes, assignments and grades
 all come straight from Canvas.
 
@@ -30,25 +30,33 @@ all come straight from Canvas.
 Anything Homeroom doesn't redo (quizzes, discussions, files, inbox and so on) opens in regular Canvas
 with a **Back to Homeroom** button in the corner. Every Homeroom page also has an **Open in Canvas** button.
 
-## Install
+## Install (bookmark, no extension needed)
 
-1. Download [`homeroom.zip`](homeroom.zip) and unzip it, or use the `extension/` folder from this repo.
-2. Open `chrome://extensions` and switch on **Developer mode** (top right).
-3. Click **Load unpacked** and pick the unzipped folder.
-4. Open your Canvas site.
+1. Open [`index.html`](index.html) (the install page) in your browser.
+2. Show the bookmarks bar (`Ctrl+Shift+B`, or `Cmd+Shift+B` on a Mac).
+3. Drag the yellow **Homeroom** button onto the bar.
+4. Open any Canvas page and click **Homeroom**. Canvas turns into Homeroom in that tab.
 
-Homeroom runs automatically on `*.instructure.com`. If your school's Canvas has its own address
-(like `canvas.myschool.edu`), open it, click the Homeroom icon in the toolbar and choose **Use Homeroom on this site**.
+Can't drag? Copy the contents of [`dist/bookmarklet.txt`](dist/bookmarklet.txt), create a new bookmark, and paste it in as the URL.
 
-To switch back to plain Canvas, use the account menu (top right) › **Turn off Homeroom**, or the toolbar icon.
+How the bookmark behaves:
+- Moving around Homeroom stays in the same tab without reloading, and the back button works.
+- Pages Homeroom doesn't redo (quizzes, discussions, files…) open in a new tab of regular Canvas, so Homeroom stays open.
+- Reloading brings regular Canvas back; click the bookmark again to return. Clicking it while Homeroom is open also goes back to Canvas.
+- Some school-managed Chromebooks block bookmarks like this. If clicking does nothing, that's why.
 
-> School-managed Chromebooks often block Developer mode and unpacked extensions. If **Load unpacked** is missing,
-> Homeroom would need to be published on the Chrome Web Store and allowed by your school.
+### Extension version (optional)
+
+If you can install extensions, the same app also builds as a Chrome extension that switches on by itself:
+unzip [`homeroom.zip`](homeroom.zip), open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked**
+and pick the folder. It runs on `*.instructure.com`; for a custom Canvas address, click the toolbar icon and choose
+**Use Homeroom on this site**.
 
 ## How it works
 
-On the pages it redoes, the content script replaces Canvas's page before Canvas's own scripts run and draws Homeroom
-instead, using the Canvas REST API with your existing login. Nothing is sent anywhere except your school's Canvas.
+When you click the bookmark, Homeroom stops Canvas's timers, replaces the page (which drops Canvas's listeners)
+and draws Homeroom instead, moving between pages with the History API. The extension does the same before Canvas's
+scripts ever run. Both use using the Canvas REST API with your existing login. Nothing is sent anywhere except your school's Canvas.
 
 | Data | Canvas API |
 | --- | --- |
@@ -63,13 +71,15 @@ instead, using the Canvas REST API with your existing login. Nothing is sent any
 
 ```bash
 npm install
-npm run build   # bundles src/ into extension/ and homeroom.zip
-npm test        # loads the extension in Chromium against a mock Canvas and clicks through every page
+npm run build   # bundles src/ into the bookmark (dist/, index.html), extension/ and homeroom.zip
+npm test        # runs both versions in Chromium against a mock Canvas (scripts/mock-canvas.mjs)
 ```
 
 | Path | What it is |
 | --- | --- |
-| `src/content/main.js` | Decides whether to take over a page or add the Back to Homeroom button |
+| `src/bookmarklet.js` | Bookmark entry point: takes over the current Canvas tab |
+| `src/content/main.js` | Extension entry point: takes over a page or adds the Back to Homeroom button |
+| `src/install.html` | Install page template (the drag button) |
 | `src/content/app.js` | App shell: top bar, menu, routing, events |
 | `src/content/views/` | One file per page |
 | `src/content/data.js`, `src/content/api.js` | Canvas API calls with a quick cache |

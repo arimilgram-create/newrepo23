@@ -57,6 +57,8 @@ const storage = {
 let els = {};
 let renderToken = 0;
 let route = null;
+// As a bookmark, Homeroom lives in one tab: Canvas-only pages open in new tabs so it keeps running.
+let bookmarklet = false;
 
 // ---------- document ----------
 
@@ -115,6 +117,7 @@ const tabLink = (href, label, on) => `<a class="tab ${on ? 'on' : ''}" href="${e
 
 const renderChrome = async () => {
   els.canvasLink.href = canvasUrl();
+  if (bookmarklet) els.canvasLink.target = '_blank';
   if (route.courseId) {
     let c = null;
     try {
@@ -289,7 +292,7 @@ const accountMenu = () => {
     ${opt('light', 'Light')}${opt('dark', 'Dark')}${opt('device', 'Match my device')}
     <hr>
     <a role="menuitem" href="${esc(canvasUrl())}">${I.external()} Open this page in Canvas</a>
-    <button role="menuitem" data-act="turn-off">${I.close()} Turn off Homeroom</button>`;
+    <button role="menuitem" data-act="turn-off">${I.close()} ${bookmarklet ? 'Back to regular Canvas' : 'Turn off Homeroom'}</button>`;
 };
 
 const cardMenu = (id) => `
@@ -331,7 +334,7 @@ const onClick = async (e) => {
         openPopover(els.accountBtn, accountMenu());
         return;
       case 'turn-off':
-        storage.set(OFF_KEY, '1');
+        if (!bookmarklet) storage.set(OFF_KEY, '1');
         {
           const u = new URL(canvasUrl(), location.href);
           u.searchParams.delete('hr');
@@ -394,6 +397,9 @@ const onClick = async (e) => {
     if (match(url)) {
       e.preventDefault();
       navigate(url.href);
+    } else if (bookmarklet) {
+      e.preventDefault();
+      window.open(url.href, '_blank', 'noopener');
     }
   }
 };
@@ -424,7 +430,8 @@ const busyTyping = () => {
   return !!a && els.main.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName);
 };
 
-export const startApp = () => {
+export const startApp = (opts = {}) => {
+  bookmarklet = !!opts.bookmarklet;
   buildDocument();
   document.addEventListener('click', onClick);
   document.addEventListener('change', onChange);
@@ -436,8 +443,13 @@ export const startApp = () => {
       els.scrim.classList.remove('clear');
     }
   });
-  window.addEventListener('popstate', () => render());
-  window.addEventListener('hashchange', () => render());
+  // Capture and stop these so any of Canvas's own leftover listeners don't react to Homeroom's navigation.
+  const onHistory = (e) => {
+    e.stopImmediatePropagation();
+    render();
+  };
+  window.addEventListener('popstate', onHistory, true);
+  window.addEventListener('hashchange', onHistory, true);
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
   setOnStale(() => {
     if (!busyTyping() && els.popover.hidden) render({ quiet: true });

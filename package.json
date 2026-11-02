@@ -6,7 +6,8 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "icons": "node scripts/icons.mjs",
-    "test": "node scripts/test.mjs"
+    "test": "node scripts/test.mjs && node scripts/test-bookmark.mjs",
+    "test:bookmark": "node scripts/test-bookmark.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.24.2"
