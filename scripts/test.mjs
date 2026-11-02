@@ -1,12 +1,149 @@
-// Unit tests for the grade math and search, then an end-to-end run of the built bookmarklet
-// against a mock Canvas site (normal mode and stay-on mode) in headless Chromium.
-import { readFile } from 'node:fs/promises';
+// Loads the built extension into Chromium and drives it against a mock Canvas site.
+// Screenshots land in screenshots/ (light and dark, desktop and phone).
+import { mkdir } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import assert from 'node:assert/strict';
-import { computeGpa, neededOnFinal, pointsFor, letterFromScore } from '../src/gpa.js';
-import { inSchedule } from '../src/settings.js';
-import { search } from '../src/palette.js';
-import { relTime, toHex, readableOn } from '../src/util.js';
+
+const require = createRequire(import.meta.url);
+const { chromium } = require('playwright');
+
+const EXT = new URL('../extension/', import.meta.url).pathname;
+const SHOTS = new URL('../screenshots/', import.meta.url).pathname;
+const ORIGIN = 'https://school.instructure.com';
+await mkdir(SHOTS, { recursive: true });
+
+const DAY = 864e5;
+const at = (days, h = 23, m = 59) => {
+  const d = new Date(Date.now() + days * DAY);
+  d.setHours(h, m, 0, 0);
+  return d.toISOString();
+};
+
+// ---------- mock Canvas data ----------
+
+const teacher = (id, name) => ({ id, display_name: name, avatar_image_url: `${ORIGIN}/images/messages/avatar-50.png` });
+const enr = (score, grade) => [{ type: 'student', computed_current_score: score, computed_current_grade: grade }];
+const courses = [
+  { id: 1, name: 'AP Calculus BC', course_code: 'MATH 252', sections: [{ name: 'Period 3' }], teachers: [teacher(70, 'Dana Whitfield')], enrollments: enr(91.24, 'A-') },
+  { id: 2, name: 'Honors Chemistry', course_code: 'CHEM 210', sections: [{ name: 'Period 5' }], teachers: [teacher(71, 'Marcus Lee')], enrollments: enr(84.6, 'B') },
+  { id: 4, name: 'American Literature', course_code: 'ENG 11', sections: [{ name: 'Period 1' }], teachers: [teacher(72, 'Priya Raman')], enrollments: enr(96, 'A') },
+  { id: 3, name: 'Robotics Club', course_code: 'CLUB', teachers: [teacher(73, 'Sam Ortiz')], enrollments: [{ type: 'ta' }] },
+];
+const sub = (o = {}) => ({ workflow_state: 'unsubmitted', submitted_at: null, score: null, missing: false, late: false, attempt: null, ...o });
+const assignments = {
+  1: [
+    { id: 101, name: 'Problem set 6: Series', due_at: at(2), points_possible: 25, submission_types: ['online_upload'], created_at: at(-3, 9), description: '<p>Complete problems <b>1–20</b> on page 412.</p>', submission: sub() },
+    { id: 102, name: 'Quiz 7', due_at: at(-1, 9), points_possible: 10, submission_types: ['online_quiz'], is_quiz_assignment: true, created_at: at(-6, 9), submission: sub({ workflow_state: 'graded', submitted_at: at(-1, 8), score: 9, posted_at: at(-1, 12) }) },
+    { id: 103, name: 'Problem set 5: Integrals', due_at: at(-3), points_possible: 25, submission_types: ['online_upload'], created_at: at(-9, 9), submission: sub({ missing: true }) },
+    { id: 104, name: 'Read section 10.3', due_at: at(1), points_possible: 0, submission_types: ['none'], created_at: at(-1, 9), submission: sub() },
+  ],
+  2: [
+    { id: 201, name: 'Lab report: Titration', due_at: at(5), points_possible: 50, submission_types: ['online_url', 'online_upload'], created_at: at(-2, 10), description: '<p>Share a link to your lab doc.</p>', submission: sub() },
+    { id: 202, name: 'Reflection: Lab safety', due_at: at(9), points_possible: 10, submission_types: ['online_text_entry'], created_at: at(-2, 10), submission: sub() },
+  ],
+  4: [{ id: 401, name: 'Essay draft', due_at: null, points_possible: 100, submission_types: ['online_upload'], created_at: at(-4, 10), submission: sub() }],
+};
+for (const [cid, list] of Object.entries(assignments)) list.forEach((a) => Object.assign(a, { course_id: Number(cid), published: true, html_url: `${ORIGIN}/courses/${cid}/assignments/${a.id}` }));
+
+const planner = () =>
+  Object.values(assignments).flat().filter((a) => a.due_at).map((a) => ({
+    plannable_id: a.id, plannable_type: 'assignment', course_id: a.course_id, plannable_date: a.due_at,
+    html_url: `/courses/${a.course_id}/assignments/${a.id}`, plannable: { title: a.name },
+    submissions: { submitted: !!a.submission.submitted_at }, planner_override: null,
+  }));
+
+const announcements = [
+  { id: 900, title: 'Test on Friday', posted_at: at(-1, 8), author: { display_name: 'Dana Whitfield' }, discussion_subentry_count: 3,
+    html_url: `${ORIGIN}/courses/1/discussion_topics/900`,
+    message: '<p>Chapter 10 test this Friday. Bring a calculator.</p><script>window.pwned = 1</script><img src="x" onerror="window.pwned=2">' },
+];
+const modules = {
+  1: [
+    { id: 11, name: 'Unit 10: Infinite series', state: 'unlocked', items: [
+      { id: 1, type: 'SubHeader', title: 'Week 1' },
+      { id: 2, type: 'Page', title: 'Notes: Convergence tests', html_url: `${ORIGIN}/courses/1/pages/notes` },
+      { id: 3, type: 'Assignment', title: 'Problem set 6: Series', content_id: 101 },
+      { id: 4, type: 'Assignment', title: 'Read section 10.3', content_id: 104 },
+      { id: 5, type: 'ExternalUrl', title: 'Desmos graphing', external_url: 'https://www.desmos.com', html_url: `${ORIGIN}/courses/1/modules/items/5` },
+    ] },
+    { id: 12, name: 'Unit 9: Integration review', state: 'unlocked', items: [
+      { id: 6, type: 'Assignment', title: 'Problem set 5: Integrals', content_id: 103 },
+      { id: 7, type: 'Quiz', title: 'Quiz 7', content_id: 102 },
+    ] },
+  ],
+};
+
+const calls = [];
+
+const route = async (r) => {
+  const req = r.request();
+  const url = new URL(req.url());
+  const p = url.pathname;
+  const method = req.method();
+  const json = (data, headers = {}) => r.fulfill({ status: 200, contentType: 'application/json', headers, body: 'while(1);' + JSON.stringify(data) });
+  if (method !== 'GET') {
+    let body = null;
+    try {
+      body = req.postDataJSON();
+    } catch (e) {
+      body = '(form data)';
+    }
+    calls.push({ method, path: p, body, csrf: req.headers()['x-csrf-token'] });
+  }
+  if (p === '/files_api/upload') return json({ id: 777, display_name: 'work.pdf' });
+  if (!p.startsWith('/api/')) {
+    return r.fulfill({
+      status: 200,
+      contentType: 'text/html',
+      body: `<!doctype html><html class="canvas"><head><title>Canvas page</title></head><body><div id="application" class="ic-app"><h1>Canvas ${p}</h1></div>
+        <script>window.ENV = {}; window.canvasRan = true;</script></body></html>`,
+    });
+  }
+  let m;
+  if (p === '/api/v1/users/self') return json({ id: 9, name: 'Ari Student', avatar_url: `${ORIGIN}/images/messages/avatar-50.png` });
+  if (p === '/api/v1/users/self/colors') return json({ custom_colors: { course_1: '#1967d2', course_2: '#c5221f', course_4: '#7627bb' } });
+  if ((m = p.match(/^\/api\/v1\/users\/self\/colors\/course_(\d+)$/))) return json({ hexcode: '#' + req.postDataJSON().hexcode });
+  if (p === '/api/v1/dashboard/dashboard_cards') return json([{ id: 1 }, { id: 2 }, { id: 4 }]);
+  if (p === '/api/v1/courses') return json(courses);
+  if (p === '/api/v1/planner/items') {
+    const cc = url.searchParams.get('context_codes[]');
+    const s = new Date(url.searchParams.get('start_date'));
+    const e = new Date(url.searchParams.get('end_date'));
+    return json(planner().filter((it) => (!cc || cc === `course_${it.course_id}`) && new Date(it.plannable_date) >= s && new Date(it.plannable_date) < e));
+  }
+  if (p === '/api/v1/planner/overrides') return json({ id: 55, marked_complete: true });
+  if (p === '/api/v1/announcements') return json(url.searchParams.get('context_codes[]') === 'course_1' ? announcements : []);
+  if ((m = p.match(/^\/api\/v1\/courses\/(\d+)\/assignments$/))) return json(assignments[m[1]] || []);
+  if ((m = p.match(/^\/api\/v1\/courses\/(\d+)\/assignments\/(\d+)/)) && !(assignments[m[1]] || []).some((a) => a.id === Number(m[2]))) {
+    return r.fulfill({ status: 404, body: '{}' });
+  }
+  if ((m = p.match(/^\/api\/v1\/courses\/(\d+)\/assignments\/(\d+)$/))) return json(assignments[m[1]].find((a) => a.id === Number(m[2])));
+  if ((m = p.match(/^\/api\/v1\/courses\/(\d+)\/assignments\/(\d+)\/submissions\/self\/files$/))) {
+    return json({ upload_url: `${ORIGIN}/files_api/upload`, upload_params: { key: 'abc' } });
+  }
+  if ((m = p.match(/^\/api\/v1\/courses\/(\d+)\/assignments\/(\d+)\/submissions\/self$/))) {
+    const a = assignments[m[1]].find((x) => x.id === Number(m[2]));
+    return json({ ...a.submission, submission_comments: [{ author_name: 'Dana Whitfield', comment: 'Show your work on #14.', created_at: at(-1, 15) }] });
+  }
+  if ((m = p.match(/^\/api\/v1\/courses\/(\d+)\/assignments\/(\d+)\/submissions$/))) {
+    const a = assignments[m[1]].find((x) => x.id === Number(m[2]));
+    a.submission = sub({ workflow_state: 'submitted', submitted_at: new Date().toISOString(), attempt: 1, attachments: [{ display_name: 'work.pdf', url: '#' }] });
+    return json(a.submission);
+  }
+  if ((m = p.match(/^\/api\/v1\/courses\/(\d+)\/modules$/))) return json(modules[m[1]] || []);
+  if ((m = p.match(/^\/api\/v1\/courses\/(\d+)\/assignment_groups$/))) {
+    return json([{ id: 1, name: 'Labs', assignments: assignments[m[1]].filter((a) => /Lab/.test(a.name)) }, { id: 2, name: 'Reflections', assignments: assignments[m[1]].filter((a) => !/Lab/.test(a.name)) }]);
+  }
+  if ((m = p.match(/^\/api\/v1\/courses\/(\d+)\/users$/))) {
+    const types = url.searchParams.getAll('enrollment_type[]');
+    if (types.includes('student') && m[1] === '2') return r.fulfill({ status: 403, body: '{}' });
+    if (types.includes('teacher')) return json([{ id: 70, name: courses.find((c) => String(c.id) === m[1]).teachers[0].display_name }]);
+    return json(['Jordan Kim', 'Alex Rivera', 'Sam Patel', 'Taylor Brooks', 'Morgan Chen'].map((name, i) => ({ id: 100 + i, name })));
+  }
+  return r.fulfill({ status: 404, body: '{}' });
+};
+
+// ---------- run ----------
 
 let passed = 0;
 const check = async (name, fn) => {
@@ -19,391 +156,254 @@ const check = async (name, fn) => {
   }
 };
 
-// ---------- unit ----------
-
-await check('grade points', () => {
-  assert.equal(pointsFor({ score: 91.2 }, 'standard'), 3.7);
-  assert.equal(pointsFor({ score: 98 }, 'plus'), 4.3);
-  assert.equal(pointsFor({ score: 50, letter: 'B+' }, 'standard'), 3.3, 'Canvas letter wins');
-  assert.equal(pointsFor({ score: 88, letter: 'B+' }, 'simple'), 3, '+/- dropped on simple scale');
-  assert.equal(pointsFor({ score: 72, letter: 'Meets' }, 'standard'), 1.7, 'unknown letter falls back to %');
-  assert.equal(pointsFor({ score: 72 }, 'standard', 'A'), 4, 'what-if');
-  assert.equal(letterFromScore(null, 'standard'), null);
+const ctx = await chromium.launchPersistentContext('', {
+  channel: 'chromium',
+  headless: true,
+  viewport: { width: 1280, height: 860 },
+  args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`],
 });
-
-await check('gpa', () => {
-  const courses = [
-    { id: '1', score: 91 }, // A- 3.7
-    { id: '2', score: 84 }, // B 3.0
-    { id: '3', score: null },
-  ];
-  const g = computeGpa(courses, { 1: { credits: 3, weight: 1 } }, 'standard', { gpa: 3.5, credits: 30 });
-  assert.equal(g.credits, 4);
-  assert.equal(g.unweighted.toFixed(3), ((3.7 * 3 + 3) / 4).toFixed(3));
-  assert.equal(g.weighted.toFixed(3), ((4.7 * 3 + 3) / 4).toFixed(3));
-  assert.equal(g.cumulative.toFixed(3), ((3.5 * 30 + g.unweighted * 4) / 34).toFixed(3));
-  assert.equal(computeGpa(courses, { 1: { skip: true }, 2: { skip: true } }, 'standard'), null);
-});
-
-await check('final exam', () => {
-  assert.equal(neededOnFinal(85, 20, 90), 110);
-  assert.equal(neededOnFinal(95, 20, 80).toFixed(1), '20.0');
-  assert.equal(neededOnFinal(80, 0, 90), null);
-});
-
-await check('schedule + helpers', () => {
-  const at = (h, m = 0) => new Date(2026, 0, 1, h, m);
-  assert.equal(inSchedule('19:00', '07:00', at(23)), true);
-  assert.equal(inSchedule('19:00', '07:00', at(6, 59)), true);
-  assert.equal(inSchedule('19:00', '07:00', at(12)), false);
-  assert.equal(inSchedule('08:00', '17:00', at(9)), true);
-  assert.equal(relTime(new Date(3 * 36e5), 0), 'in 3h');
-  assert.equal(relTime(new Date(0), 2 * 864e5), '2d ago');
-  assert.equal(toHex('rgb(142, 91, 214)'), '#8e5bd6');
-  assert.equal(readableOn('#ffffff'), '#14171a');
-  assert.equal(readableOn('#0f172a'), '#ffffff');
-});
-
-await check('search', () => {
-  const list = [
-    { label: 'Calculus II', hint: 'MATH 152', group: 'Courses' },
-    { label: 'Calculus II › Grades', hint: 'MATH 152', group: 'Courses' },
-    { label: 'General Chemistry › Grades', hint: 'CHEM 101', group: 'Courses' },
-    { label: 'Problem set 6', hint: 'MATH 152', group: 'Due soon' },
-  ];
-  assert.equal(search(list, 'calc grades')[0].label, 'Calculus II › Grades');
-  assert.equal(search(list, 'chem')[0].label, 'General Chemistry › Grades');
-  assert.equal(search(list, 'math 152 problem')[0].label, 'Problem set 6');
-  assert.equal(search(list, 'zzz').length, 0);
-});
-
-// ---------- end to end ----------
-
-const require = createRequire(import.meta.url);
-const { chromium } = require('playwright');
-const code = await readFile(new URL('../dist/quad.min.js', import.meta.url), 'utf8');
-const ORIGIN = 'https://school.instructure.test';
-const hours = (h) => new Date(Date.now() + h * 36e5).toISOString();
-
-const card = (id, name, rgb) => `
-  <div class="ic-DashboardCard">
-    <div class="ic-DashboardCard__header">
-      <div class="ic-DashboardCard__header_image" style="background-image: url(&quot;data:image/gif;base64,R0lGODlhAQABAAAAACw=&quot;);">
-        <div class="ic-DashboardCard__header_hero" style="background-color: ${rgb}; opacity: 0.6;"></div>
-      </div>
-      <a class="ic-DashboardCard__link" href="/courses/${id}">
-        <div class="ic-DashboardCard__header_content"><h3 class="ic-DashboardCard__header-title" style="color: ${rgb}"><span>${name}</span></h3></div>
-      </a>
-    </div>
-    <nav class="ic-DashboardCard__action-container"><a href="/courses/${id}/assignments">Assignments</a></nav>
-  </div>`;
-
-const canvasPage = (path) => `<!doctype html><html><head><title>${path === '/' ? 'Dashboard' : 'Course ' + path}</title></head><body>
-  <div id="application" class="ic-app">
-    <header class="ic-app-header"><div class="ic-app-header__logomark-container">LOGO</div>
-      <ul><li class="ic-app-header__menu-list-item ic-app-header__menu-list-item--active"><a class="ic-app-header__menu-list-link"><div class="menu-item__text">Dashboard</div></a></li></ul>
-    </header>
-    <div id="wrapper" class="ic-Layout-wrapper"><div id="main">
-      <div id="content"><h1>${path}</h1><div id="DashboardCard_Container"></div></div>
-      <aside id="right-side"><div class="Sidebar__TodoListContainer">Canvas To Do</div><div class="Sidebar__RecentFeedbackContainer">Feedback</div></aside>
-    </div></div>
-  </div>
-  <script>
-    window.ENV = { current_user_id: '9' };
-    document.cookie = '_csrf_token=' + encodeURIComponent('tok+en/=');
-    // Canvas renders dashboard cards late with React; mimic that.
-    setTimeout(() => {
-      document.getElementById('DashboardCard_Container').innerHTML = ${JSON.stringify(
-        card(1, 'Calculus II', 'rgb(142, 91, 214)') + card(2, 'General Chemistry', 'rgb(217, 83, 79)') + card(4, 'Intro to Literature', 'rgb(43, 154, 107)')
-      )};
-    }, 80);
-  </script>
-</body></html>`;
-
-const enrollment = (score, grade) => [{ type: 'student', computed_current_score: score, computed_current_grade: grade }];
-const courses = [
-  { id: 1, name: 'Calculus II', course_code: 'MATH 152', enrollments: enrollment(91.24, null) },
-  { id: 2, name: 'General Chemistry', course_code: 'CHEM 101', enrollments: enrollment(84.6, 'B') },
-  { id: 3, name: 'Teaching Assistant Lab', enrollments: [{ type: 'ta' }] },
-  { id: 4, name: 'Intro to Literature', course_code: 'ENGL 120', enrollments: enrollment(96, 'A') },
-];
-const planner = [
-  { plannable_id: 11, plannable_type: 'assignment', course_id: 2, context_name: 'CHEM 101', html_url: '/courses/2/assignments/11',
-    plannable_date: hours(-26), plannable: { title: 'Lab 4 report', points_possible: 20 }, submissions: { submitted: false, missing: true }, planner_override: null },
-  { plannable_id: 12, plannable_type: 'quiz', course_id: 1, context_name: 'MATH 152', html_url: '/courses/1/quizzes/12',
-    plannable_date: hours(2), plannable: { title: 'Quiz <b>7</b>', points_possible: 10 }, submissions: { submitted: true }, planner_override: null },
-  { plannable_id: 13, plannable_type: 'assignment', course_id: 1, context_name: 'MATH 152', html_url: '/courses/1/assignments/13',
-    plannable_date: hours(5), plannable: { title: 'Problem set 6', points_possible: 25 }, submissions: { submitted: false }, planner_override: null },
-  { plannable_id: 16, plannable_type: 'discussion_topic', course_id: 4, context_name: 'ENGL 120', html_url: '/courses/4/discussion_topics/16',
-    plannable_date: hours(50), plannable: { title: 'Response to Baldwin' }, submissions: { submitted: false }, planner_override: null },
-  { plannable_id: 14, plannable_type: 'announcement', course_id: 1, plannable_date: hours(3), plannable: { title: 'Ignore me' } },
-  { plannable_id: 15, plannable_type: 'assignment', course_id: 1, plannable_date: hours(-72), plannable: { title: 'Old done' }, submissions: { submitted: true } },
-];
-
-const calls = [];
-const browser = await chromium.launch();
-const context = await browser.newContext({ acceptDownloads: true });
-const page = await context.newPage();
+await ctx.addCookies([{ name: '_csrf_token', value: encodeURIComponent('tok+en/='), domain: 'school.instructure.com', path: '/', secure: true }]);
+await ctx.route(`${ORIGIN}/**`, route);
+const page = await ctx.newPage();
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
-page.on('dialog', (d) => {
-  errors.push('dialog: ' + d.message());
-  d.dismiss();
+page.on('console', (m) => m.type() === 'error' && !/favicon|Failed to load resource/.test(m.text()) && errors.push(m.text()));
+
+const shot = (name) => page.screenshot({ path: `${SHOTS}${name}.png`, fullPage: false });
+const noErrorView = async () => assert.equal(await page.locator('.empty-state h2', { hasText: 'Couldn’t load' }).count(), 0);
+
+await check('home: class cards replace Canvas', async () => {
+  await page.goto(ORIGIN + '/', { waitUntil: 'commit' });
+  await page.locator('.class-card .cc-name').first().waitFor();
+  assert.deepEqual(await page.locator('.cc-name').allTextContents(), ['AP Calculus BC', 'Honors Chemistry', 'American Literature']);
+  assert.equal(await page.evaluate(() => window.canvasRan), undefined, 'Canvas scripts never ran');
+  assert.equal(await page.title(), 'Homeroom');
+  assert.equal(await page.locator('.cc-teacher').first().textContent(), 'Dana Whitfield');
+  assert.match(await page.locator('.class-card').first().locator('.cc-body').textContent(), /Read section 10\.3|Problem set 6/);
+  await noErrorView();
+  await shot('1-home');
 });
 
-let noteId = 500;
-await context.route(`${ORIGIN}/**`, async (route) => {
-  const req = route.request();
-  const url = new URL(req.url());
-  const method = req.method();
-  const json = (data, headers = {}) =>
-    route.fulfill({ status: 200, contentType: 'application/json', headers, body: 'while(1);' + JSON.stringify(data) });
-  if (!url.pathname.startsWith('/api/')) return route.fulfill({ status: 200, contentType: 'text/html', body: canvasPage(url.pathname) });
-  if (method !== 'GET') calls.push({ method, path: url.pathname, body: req.postDataJSON(), csrf: req.headers()['x-csrf-token'] });
-  if (url.pathname === '/api/v1/courses') {
-    if (url.searchParams.get('page') === '2') return json(courses.slice(2));
-    return json(courses.slice(0, 2), { Link: `<${ORIGIN}/api/v1/courses?page=2>; rel="next"` });
+await check('drawer lists every class and the to-do', async () => {
+  await page.locator('[data-act=drawer]').click();
+  await page.locator('.drawer.open').waitFor();
+  assert.equal(await page.locator('.drawer .dr-item.class').count(), 4);
+  assert.equal(await page.locator('.drawer .dr-item', { hasText: 'To-do' }).count(), 1);
+  await page.waitForTimeout(250);
+  await shot('2-drawer');
+  await page.keyboard.press('Escape');
+});
+
+await check('stream', async () => {
+  await page.locator('.cc-title', { hasText: 'AP Calculus BC' }).click();
+  await page.waitForURL(`${ORIGIN}/courses/1`);
+  await page.locator('.hero h1').waitFor();
+  assert.equal(await page.locator('.hero h1').textContent(), 'AP Calculus BC');
+  assert.equal(await page.locator('.tab.on').textContent(), 'Stream');
+  assert.match(await page.locator('.upcoming').textContent(), /Read section 10\.3/);
+  assert.match(await page.locator('.post').first().textContent(), /Chapter 10 test this Friday/);
+  assert.equal(await page.evaluate(() => window.pwned), undefined, 'teacher HTML is sanitized');
+  assert.equal(await page.locator('.post img[onerror]').count(), 0);
+  assert.ok((await page.locator('.post-mini').count()) >= 3);
+  assert.equal(await page.evaluate(() => window.canvasRan), undefined, 'moved without reloading');
+  await shot('3-stream');
+});
+
+await check('classwork with topics', async () => {
+  await page.locator('.tab', { hasText: 'Classwork' }).click();
+  await page.waitForURL(`${ORIGIN}/courses/1/modules`);
+  await page.locator('.topic-title').first().waitFor();
+  assert.deepEqual(await page.locator('.topic-title').allTextContents(), ['Unit 10: Infinite series', 'Unit 9: Integration review']);
+  const row = page.locator('.cw-item', { hasText: 'Problem set 5' });
+  await row.locator('.cw-row').click();
+  assert.match(await row.locator('.cw-detail').textContent(), /Missing/);
+  assert.equal(await row.locator('.cw-detail a').getAttribute('href'), '/courses/1/assignments/103');
+  await page.locator('.cw-item', { hasText: 'Problem set 6' }).locator('.cw-row').click();
+  await shot('4-classwork');
+});
+
+await check('classwork falls back to assignment groups', async () => {
+  await page.goto(ORIGIN + '/courses/2/modules', { waitUntil: 'commit' });
+  await page.locator('.topic-title').first().waitFor();
+  assert.deepEqual(await page.locator('.topic-title').allTextContents(), ['Labs', 'Reflections']);
+});
+
+await check('people', async () => {
+  await page.goto(ORIGIN + '/courses/1/users', { waitUntil: 'commit' });
+  await page.locator('.people-list li').first().waitFor();
+  assert.match(await page.locator('.people-head').nth(1).textContent(), /5 students/);
+  await shot('5-people');
+  await page.locator('.tb-class').click();
+  await page.goto(ORIGIN + '/courses/2/users', { waitUntil: 'commit' });
+  await page.locator('.people-head').first().waitFor();
+  assert.match(await page.locator('.people').textContent(), /hidden the class list/);
+});
+
+await check('grades / your work', async () => {
+  await page.goto(ORIGIN + '/courses/1/grades', { waitUntil: 'commit' });
+  await page.locator('.yw-overall b').waitFor();
+  assert.equal(await page.locator('.yw-overall b').textContent(), '91.24% · A-');
+  assert.match(await page.locator('.work-row', { hasText: 'Quiz 7' }).textContent(), /9\/10/);
+  await shot('6-grades');
+  await page.locator('.chip', { hasText: 'Missing' }).click();
+  await page.waitForURL(/show=missing/);
+  await page.waitForFunction(() => document.querySelectorAll('.work-row').length === 1);
+  assert.match(await page.locator('.work-row').textContent(), /Problem set 5/);
+});
+
+await check('turn in a file', async () => {
+  await page.goto(ORIGIN + '/courses/1/assignments/101', { waitUntil: 'commit' });
+  await page.locator('.work-card').waitFor();
+  assert.equal(await page.locator('.wc-head .status').textContent(), 'Assigned');
+  assert.match(await page.locator('.as-body').textContent(), /problems 1–20/);
+  assert.equal(await page.locator('[data-act=turn-in]').isDisabled(), true);
+  await page.locator('[data-act=add-menu]').click();
+  assert.deepEqual(await page.locator('.menu button').allTextContents().then((t) => t.map((s) => s.trim())), ['File']);
+  await shot('7-assignment');
+  await page.locator('#hr-file').setInputFiles({ name: 'work.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 test') });
+  await page.locator('.attach.pending', { hasText: 'work.pdf' }).waitFor();
+  await page.locator('[data-act=turn-in]').click();
+  await page.locator('.toast', { hasText: 'Turned in' }).waitFor();
+  await page.locator('.wc-head .status', { hasText: 'Turned in' }).waitFor();
+  const slot = calls.find((c) => c.path.endsWith('/assignments/101/submissions/self/files'));
+  assert.deepEqual(slot.body, { name: 'work.pdf', size: 13, content_type: 'application/pdf' });
+  assert.equal(slot.csrf, 'tok+en/=');
+  const done = calls.find((c) => c.path === '/api/v1/courses/1/assignments/101/submissions');
+  assert.deepEqual(done.body, { submission: { submission_type: 'online_upload', file_ids: [777] } });
+});
+
+await check('private comments', async () => {
+  assert.match(await page.locator('.comments-card').textContent(), /Show your work on #14/);
+  await page.locator('#hr-comment').fill('Will do, thanks!');
+  await page.locator('#hr-comment').press('Enter');
+  await page.locator('.pc-text', { hasText: 'Will do, thanks!' }).waitFor();
+  assert.deepEqual(calls.at(-1).body, { comment: { text_comment: 'Will do, thanks!' } });
+});
+
+await check('mark as done', async () => {
+  await page.goto(ORIGIN + '/courses/1/assignments/104', { waitUntil: 'commit' });
+  await page.locator('[data-act=mark-done]').click();
+  await page.locator('[data-act=mark-done]', { hasText: 'Unmark as done' }).waitFor();
+  assert.deepEqual(calls.at(-1).body, { plannable_type: 'assignment', plannable_id: 104, marked_complete: true });
+});
+
+await check('turn in a link', async () => {
+  await page.goto(ORIGIN + '/courses/2/assignments/201', { waitUntil: 'commit' });
+  await page.locator('[data-act=add-menu]').click();
+  await page.locator('.menu button', { hasText: 'Link' }).click();
+  await page.locator('#hr-url').fill('https://docs.example.com/lab');
+  await page.locator('[data-act=turn-in]').click();
+  await page.locator('.toast', { hasText: 'Turned in' }).waitFor();
+  assert.deepEqual(calls.at(-1).body, { submission: { submission_type: 'online_url', url: 'https://docs.example.com/lab' } });
+});
+
+await check('to-do', async () => {
+  await page.goto(ORIGIN + '/#todo/assigned', { waitUntil: 'commit' });
+  await page.locator('.todo-group').first().waitFor();
+  assert.equal(await page.locator('.tab.on').textContent(), 'Assigned');
+  const titles = await page.locator('.todo-group.open .tr-title').allTextContents();
+  assert.ok(titles.includes('Reflection: Lab safety'));
+  assert.ok(!titles.includes('Problem set 6: Series'), 'turned-in work moved to Done');
+  await shot('8-todo');
+  await page.locator('.tab', { hasText: 'Missing' }).click();
+  await page.waitForURL(/#todo\/missing/);
+  await page.waitForFunction(() => document.querySelector('.tab.on')?.textContent === 'Missing' && document.querySelector('.todo-group.open'));
+  assert.deepEqual(await page.locator('.todo-group.open .tr-title').allTextContents(), ['Problem set 5: Integrals']);
+  await page.locator('.tab', { hasText: 'Done' }).click();
+  await page.waitForFunction(() => /Quiz 7/.test(document.querySelector('.todo')?.textContent || '') || document.querySelectorAll('.todo-group').length === 5);
+  assert.match(await page.locator('.todo').textContent(), /Quiz 7/);
+});
+
+await check('calendar', async () => {
+  await page.goto(ORIGIN + '/calendar', { waitUntil: 'commit' });
+  await page.locator('.day').first().waitFor();
+  assert.equal(await page.locator('.day').count(), 7);
+  assert.equal(await page.locator('.day.today').count(), 1);
+  await shot('9-calendar');
+  const before = await page.locator('.cal-nav h2').textContent();
+  await page.locator('[aria-label="Next week"]').click();
+  await page.waitForFunction((b) => document.querySelector('.cal-nav h2').textContent !== b, before);
+});
+
+await check('class color', async () => {
+  await page.goto(ORIGIN + '/', { waitUntil: 'commit' });
+  await page.locator('[data-act=card-menu]').first().click();
+  await page.locator('.swatch[data-color="#e37400"]').click();
+  await page.locator('.toast', { hasText: 'Class color updated' }).waitFor();
+  assert.deepEqual(calls.at(-1), { method: 'PUT', path: '/api/v1/users/self/colors/course_1', body: { hexcode: 'e37400' }, csrf: 'tok+en/=' });
+});
+
+await check('dark theme sticks', async () => {
+  await page.locator('[data-act=account]').first().click();
+  await page.locator('[data-theme=dark]').click();
+  assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'dark');
+  await page.keyboard.press('Escape');
+  await page.reload({ waitUntil: 'commit' });
+  await page.locator('.class-card .cc-name').first().waitFor();
+  assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'dark');
+  await shot('10-home-dark');
+  await page.goto(ORIGIN + '/courses/1', { waitUntil: 'commit' });
+  await page.locator('.hero h1').waitFor();
+  await shot('11-stream-dark');
+  await page.goto(ORIGIN + '/courses/1/assignments/101', { waitUntil: 'commit' });
+  await page.locator('.work-card').waitFor();
+  await shot('12-assignment-dark');
+  await page.evaluate(() => localStorage.setItem('homeroom:theme', 'light'));
+});
+
+await check('back button', async () => {
+  await page.goto(ORIGIN + '/courses/1', { waitUntil: 'commit' });
+  await page.locator('.hero h1').waitFor();
+  await page.locator('.tab', { hasText: 'People' }).click();
+  await page.locator('.people-list').first().waitFor();
+  await page.goBack({ waitUntil: 'commit' });
+  await page.locator('.hero h1').waitFor();
+  assert.equal(new URL(page.url()).pathname, '/courses/1');
+});
+
+await check('pages Homeroom doesn’t redo stay Canvas, with a way back', async () => {
+  await page.goto(ORIGIN + '/courses/1/discussion_topics', { waitUntil: 'commit' });
+  await page.locator('#homeroom-pill').waitFor();
+  assert.equal(await page.evaluate(() => window.canvasRan), true);
+  const pill = page.locator('#homeroom-pill a');
+  assert.match(await pill.textContent(), /Back to Homeroom/);
+  assert.equal(await pill.getAttribute('href'), '/courses/1');
+  await pill.click();
+  await page.locator('.hero h1').waitFor();
+});
+
+await check('open in Canvas, then switch back', async () => {
+  await page.locator('[data-canvas-link]').click();
+  await page.waitForURL(/hr=off/);
+  await page.locator('#homeroom-pill').waitFor();
+  assert.match(await page.locator('#homeroom-pill a').textContent(), /Switch to Homeroom/);
+  await page.locator('#homeroom-pill a').click();
+  await page.locator('.hero h1').waitFor();
+});
+
+await check('turn Homeroom off and on', async () => {
+  await page.locator('[data-act=account]').first().click();
+  await page.locator('[data-act=turn-off]').click();
+  await page.waitForURL(`${ORIGIN}/courses/1`);
+  await page.locator('#homeroom-pill').waitFor();
+  assert.equal(await page.evaluate(() => window.canvasRan), true);
+  assert.match(await page.locator('#homeroom-pill a').textContent(), /Turn Homeroom back on/);
+  await page.locator('#homeroom-pill a').click();
+  await page.locator('.hero h1').waitFor();
+});
+
+await check('phone layout', async () => {
+  const phone = await ctx.newPage();
+  await phone.setViewportSize({ width: 390, height: 844 });
+  for (const [path, sel, name] of [['/', '.class-card .cc-name', '13-phone-home'], ['/courses/1', '.hero h1', '14-phone-stream'], ['/courses/2/assignments/202', '.work-card', '15-phone-assignment'], ['/calendar', '.day', '16-phone-calendar']]) {
+    await phone.goto(ORIGIN + path, { waitUntil: 'commit' });
+    await phone.locator(sel).first().waitFor();
+    assert.equal(await phone.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, `${path} fits the phone`);
+    await phone.screenshot({ path: `${SHOTS}${name}.png` });
   }
-  if (url.pathname === '/api/v1/planner/items') return json(planner);
-  if (url.pathname === '/api/v1/users/self/colors') return json({ custom_colors: { course_1: '#8e5bd6', course_2: '#d9534f' } });
-  if (url.pathname === '/api/v1/planner/overrides') return json({ id: 99, marked_complete: true });
-  if (url.pathname === '/api/v1/planner/overrides/99') return json({ id: 99, marked_complete: false });
-  if (url.pathname === '/api/v1/planner_notes' && method === 'POST') {
-    const b = req.postDataJSON();
-    planner.push({ plannable_id: ++noteId, plannable_type: 'planner_note', course_id: b.course_id, plannable_date: b.todo_date,
-      plannable: { title: b.title, todo_date: b.todo_date }, planner_override: null });
-    return json({ id: noteId });
-  }
-  if (url.pathname.startsWith('/api/v1/planner_notes/') && method === 'DELETE') {
-    const id = Number(url.pathname.split('/').pop());
-    planner.splice(planner.findIndex((p) => p.plannable_id === id), 1);
-    return json({});
-  }
-  if (url.pathname.startsWith('/api/v1/users/self/colors/')) return json({ hexcode: req.postDataJSON().hexcode });
-  if (url.pathname.startsWith('/api/v1/users/self/course_nicknames/')) return json({ nickname: (req.postDataJSON() || {}).nickname });
-  return route.fulfill({ status: 404, body: 'nope' });
-});
-
-const q = (sel) => page.locator('#quad-host').locator(sel);
-const html = () => page.evaluate(() => document.documentElement.className);
-const until = (fn, arg) => page.waitForFunction(fn, arg, { timeout: 5000 });
-
-await page.goto(ORIGIN + '/');
-await page.evaluate(code);
-
-await check('to-do list', async () => {
-  await q('.row').first().waitFor();
-  const groups = await q('main .group').allTextContents();
-  assert.equal(groups[0], 'Overdue · 1');
-  const titles = await q('main .row .title').allTextContents();
-  assert.deepEqual(titles, ['Lab 4 report', 'Quiz <b>7</b>', 'Problem set 6', 'Response to Baldwin']);
-  assert.equal(await q('main .row .check').nth(1).isDisabled(), true, 'turned-in work is locked');
-  assert.equal((await q('nav .tab[data-tab=todo] .count').textContent()).trim(), '3');
-});
-
-await check('due-soon reminders', async () => {
-  const toasts = await q('.toast.reminder').allTextContents();
-  assert.equal(toasts.length, 1, 'only unfinished work inside 24h');
-  assert.match(toasts[0], /Problem set 6/);
-  await q('.toast.reminder [data-act=dismiss]').click();
-  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('quad:v2')).dismissed);
-  assert.ok(saved['assignment:13']);
-});
-
-await check('dashboard cards', async () => {
-  await until(() => document.querySelectorAll('.quad-grade').length === 3);
-  assert.deepEqual(await page.locator('.quad-grade').allTextContents(), ['91.2% A-', '84.6% B', '96% A']);
-  await until(() => document.querySelectorAll('.quad-card-list').length === 3);
-  const lists = await page.locator('.quad-card-list').allTextContents();
-  assert.match(lists[0], /Problem set 6/);
-  assert.doesNotMatch(lists[0], /Quiz/, 'submitted work left off cards');
-  assert.match(lists[1], /Lab 4 report\s*Late/);
-  // Sits between the header and the action links.
-  assert.equal(await page.evaluate(() => document.querySelector('.quad-card-list').nextElementSibling.tagName), 'NAV');
-});
-
-await check('sidebar to-do replaces Canvas’s', async () => {
-  await until(() => document.querySelector('.quad-embed'));
-  const embedRows = await page.locator('.quad-embed').locator('.row .title').allTextContents();
-  assert.equal(embedRows.length, 4);
-  assert.equal(await page.locator('.Sidebar__TodoListContainer').isHidden(), true);
-});
-
-await check('check off and add to-dos', async () => {
-  await q('main .row .check').nth(2).check();
-  await until(() => document.querySelector('#quad-host').shadowRoot.querySelectorAll('main .row.done').length === 2);
-  assert.deepEqual(calls.at(-1), {
-    method: 'POST', path: '/api/v1/planner/overrides', csrf: 'tok+en/=',
-    body: { plannable_type: 'assignment', plannable_id: 13, marked_complete: true },
-  });
-  await q('[data-act=add-open]').click();
-  await q('#add-title').fill('Buy lab goggles');
-  await q('#add-course').selectOption('2');
-  await q('form.add [type=submit]').click();
-  await q('main .row .title', { hasText: 'Buy lab goggles' }).first().waitFor();
-  const add = calls.find((c) => c.path === '/api/v1/planner_notes');
-  assert.equal(add.body.title, 'Buy lab goggles');
-  assert.equal(add.body.course_id, '2');
-  const row = q('main .row', { hasText: 'Buy lab goggles' });
-  await row.locator('[data-act=del-note]').click();
-  await until(() => ![...document.querySelector('#quad-host').shadowRoot.querySelectorAll('main .title')].some((a) => a.textContent === 'Buy lab goggles'));
-  assert.equal(calls.at(-1).method, 'DELETE');
-});
-
-await check('course filter', async () => {
-  await q('#todo-course').selectOption('4');
-  assert.deepEqual(await q('main .row .title').allTextContents(), ['Response to Baldwin']);
-  await q('#todo-course').selectOption('all');
-});
-
-await check('grades', async () => {
-  await q('nav [data-tab=grades]').click();
-  assert.equal(await q('a.course').count(), 3, 'TA course left out');
-  assert.match(await q('.summary').textContent(), /90\.6%/);
-});
-
-await check('gpa with what-if and past semesters', async () => {
-  await q('nav [data-tab=gpa]').click();
-  const stats = () => q('.stat b').allTextContents();
-  // A- 3.7, B 3.0, A 4.0 → 3.567
-  assert.deepEqual(await stats(), ['3.57', '3.57', '—']);
-  await q('#g-lv-1').selectOption('1');
-  assert.deepEqual((await stats()).slice(0, 2), ['3.57', '3.90']);
-  await q('#g-wi-2').selectOption('A');
-  assert.equal((await stats())[0], '3.90');
-  await q('#past-gpa').fill('3.2');
-  await q('#past-gpa').dispatchEvent('change');
-  await q('#past-cr').fill('30');
-  await q('#past-cr').dispatchEvent('change');
-  assert.equal((await stats())[2], ((3.2 * 30 + 3.9 * 3) / 33).toFixed(2));
-});
-
-await check('tools', async () => {
-  await q('nav [data-tab=tools]').click();
-  await q('#final-course').selectOption('2');
-  assert.equal(await q('#final-current').inputValue(), '84.6');
-  await q('#final-target').fill('90');
-  await q('#final-target').dispatchEvent('change');
-  assert.match(await q('.result').textContent(), /111\.6%.*above 100%/);
-  await q('#final-target').fill('80');
-  await q('#final-target').dispatchEvent('change');
-  assert.match(await q('.result').textContent(), /You need 61\.6% on the final/);
-
-  await q('[data-act=timer-start]').click();
-  await until(() => /Focus \d\d:\d\d/.test(document.querySelector('#quad-host').shadowRoot.querySelector('[data-timer-chip]').textContent));
-
-  await q('#notes').fill('Study for chem quiz');
-  await page.waitForTimeout(400);
-  assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('quad:v2')).notes), 'Study for chem quiz');
-
-  const [download] = await Promise.all([page.waitForEvent('download'), q('[data-act=export-ics]').click()]);
-  const ics = await readFile(await download.path(), 'utf8');
-  assert.equal(download.suggestedFilename(), 'canvas-due-dates.ics');
-  assert.match(ics, /BEGIN:VCALENDAR/);
-  assert.match(ics, /SUMMARY:Response to Baldwin \(ENGL 120\)/);
-  assert.equal((ics.match(/BEGIN:VEVENT/g) || []).length, 3);
-});
-
-await check('themes and palettes', async () => {
-  await q('nav [data-tab=settings]').click();
-  await q('[data-settab=look]').click();
-  await q('#s-themeRecolor').check();
-  const before = calls.length;
-  await q('[data-act=theme][data-id=midnight]').click();
-  await until(() => document.documentElement.classList.contains('quad-dark'));
-  const cls = await html();
-  ['quad-dark', 'quad-nav', 'quad-accent', 'quad-font'].forEach((c) => assert.ok(cls.includes(c), c));
-  assert.match(await page.locator('#quad-font-link').getAttribute('href'), /family=Inter/);
-  await page.waitForTimeout(300);
-  const recolors = calls.slice(before).filter((c) => c.path.startsWith('/api/v1/users/self/colors/'));
-  assert.equal(recolors.length, 4, 'every course recolored');
-  assert.deepEqual(recolors[0].body, { hexcode: '03045e' });
-  // Card text and hero pick up the new color right away.
-  assert.equal(await page.locator('.ic-DashboardCard__header-title').first().evaluate((el) => el.style.color), 'rgb(3, 4, 94)');
-  // Media is flipped back so pictures look normal in dark mode.
-  assert.match(await page.locator('.ic-DashboardCard__header_image').first().evaluate((el) => getComputedStyle(el).filter), /invert\(1\)/);
-  assert.equal(await page.locator('.ic-DashboardCard__header_hero').first().evaluate((el) => getComputedStyle(el).filter), 'none');
-});
-
-await check('dashboard settings', async () => {
-  await q('[data-settab=dashboard]').click();
-  await q('#s-cardStyle').selectOption('gradient');
-  await until(() => /linear-gradient/.test(document.querySelector('.ic-DashboardCard__header_hero').getAttribute('style')));
-  await q('#s-hideFeedback').check();
-  await q('#s-fullWidth').check();
-  await q('#s-hideLogo').check();
-  assert.equal(await page.locator('.Sidebar__RecentFeedbackContainer').isHidden(), true);
-  assert.equal(await page.locator('.ic-app-header__logomark-container').isHidden(), true);
-  await q('#s-cardGrades').uncheck();
-  await until(() => !document.querySelector('.quad-grade'));
-  await q('#s-cardGrades').check();
-});
-
-await check('course nicknames and pictures', async () => {
-  await q('[data-settab=courses]').click();
-  await q('#c-nick-1').fill('Calc');
-  await q('#c-nick-1').dispatchEvent('change');
-  await until(() => document.querySelector('.ic-DashboardCard__header-title span').textContent === 'Calc');
-  assert.deepEqual(calls.at(-1), { method: 'PUT', path: '/api/v1/users/self/course_nicknames/1', body: { nickname: 'Calc' }, csrf: 'tok+en/=' });
-  await q('#c-img-2').fill('https://example.com/chem.jpg');
-  await q('#c-img-2').dispatchEvent('change');
-  await until(() => /chem\.jpg/.test(document.querySelectorAll('.ic-DashboardCard__header_hero')[1].getAttribute('style')));
-});
-
-await check('command palette', async () => {
-  await page.keyboard.press('Control+k');
-  await q('.palette input').waitFor();
-  await page.keyboard.type('chem grades');
-  assert.match(await q('.result.on .rl').textContent(), /General Chemistry › Grades/);
-  await Promise.all([page.waitForURL(`${ORIGIN}/courses/2/grades`), page.keyboard.press('Enter')]);
-});
-
-await check('settings survive a page load', async () => {
-  await page.evaluate(code);
-  await q('.panel').waitFor();
-  assert.ok((await html()).includes('quad-dark'));
-  await page.keyboard.press('Alt+q');
-  assert.equal(await q('.panel').isHidden(), true);
-  await page.evaluate(code);
-  assert.equal(await q('.panel').isVisible(), true);
-});
-
-await check('stay-on mode keeps Quad running across pages', async () => {
-  await page.goto(ORIGIN + '/');
-  await page.evaluate(code);
-  await q('nav [data-tab=settings]').click();
-  await q('[data-settab=more]').click();
-  await q('#s-stayOn').check();
-  const frame = page.frameLocator('#quad-frame');
-  await frame.locator('.quad-grade').first().waitFor();
-  assert.ok(await frame.locator('html').evaluate((el) => el.classList.contains('quad-dark')));
-  // Click a link inside Canvas: the frame navigates, Quad stays and re-applies itself.
-  await frame.locator('a[href="/courses/4"]').first().click();
-  await page.waitForURL(`${ORIGIN}/courses/4`);
-  await frame.locator('html.quad-dark').waitFor();
-  assert.equal(await page.title(), 'Course /courses/4');
-  assert.equal(await page.evaluate(() => window.__quad.version), 2);
-  // The palette navigates the frame, not the tab.
-  await page.keyboard.press('Control+k');
-  await page.keyboard.type('calendar');
-  await page.keyboard.press('Enter');
-  await page.waitForURL(`${ORIGIN}/calendar`);
-  assert.equal(await page.evaluate(() => !!window.__quad), true, 'still the same page');
-  await page.screenshot({ path: process.env.SHOT || 'dist/test-stayon.png' });
-});
-
-await check('refuses to run off Canvas', async () => {
-  const other = await context.newPage();
-  const dialogs = [];
-  other.on('dialog', (d) => {
-    dialogs.push(d.message());
-    d.dismiss();
-  });
-  await other.setContent('<p>not canvas</p>');
-  await other.evaluate(code);
-  assert.match(dialogs[0] || '', /works on Canvas/);
+  await phone.close();
 });
 
 assert.deepEqual(errors, []);
-await browser.close();
-console.log(`All ${passed} checks passed.`);
+await ctx.close();
+console.log(`All ${passed} checks passed. Screenshots are in screenshots/.`);

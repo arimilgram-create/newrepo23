@@ -1,10 +1,11 @@
 {
-  "name": "quad",
+  "name": "homeroom",
   "version": "1.0.0",
   "private": true,
-  "description": "Canvas LMS power-ups (dark mode, to-do list, grades, GPA) as a bookmarklet. No browser extension needed.",
+  "description": "Homeroom: a clean, card-based classroom layout for Canvas, as a Chrome extension.",
   "scripts": {
     "build": "node scripts/build.mjs",
+    "icons": "node scripts/icons.mjs",
     "test": "node scripts/test.mjs"
   },
   "devDependencies": {

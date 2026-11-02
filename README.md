@@ -1,75 +1,79 @@
-# Quad
+# Homeroom
 
-Canvas LMS power-ups for students, delivered as a **bookmarklet**, so no browser extension is needed.
-It works on school laptops that block extensions, and in any browser with a bookmarks bar.
+A Chrome extension that gives Canvas a clean, card-based classroom layout: class cards, a Stream,
+Classwork organized by topic, People, a To-do list and a Calendar. Your classes, assignments and grades
+all come straight from Canvas.
 
-## Features
+![Home](screenshots/1-home.png)
 
-**Make Canvas yours**
-- 12 one-click themes (sidebar color, accent color, font, optional card palette)
-- Dark mode: on, match device, or scheduled; Dim / Dark / Black levels
-- Course card palettes saved to your Canvas account; per-course colors and nicknames
-- Card styles (pictures, solid, gradient), custom card pictures, compact cards, corner rounding
-- 11 fonts, full-width layout, hide the school logo and "Recent Feedback"
+| Stream | Classwork | Assignment |
+| --- | --- | --- |
+| ![Stream](screenshots/3-stream.png) | ![Classwork](screenshots/4-classwork.png) | ![Assignment](screenshots/7-assignment.png) |
+| **To-do** | **Calendar** | **Dark theme** |
+| ![To-do](screenshots/8-todo.png) | ![Calendar](screenshots/9-calendar.png) | ![Dark](screenshots/10-home-dark.png) |
 
-**Never miss work**
-- To-do list grouped by day, overdue first, with a course filter; checking items off syncs with the Canvas planner
-- Upcoming work listed on each dashboard card
-- Quad's to-do (and optional notes) in the dashboard sidebar, replacing Canvas's
-- Add and delete your own to-dos (Canvas planner notes)
-- Due-soon reminders and desktop notifications
-- `.ics` export for Google Calendar, Apple Calendar or Outlook
+## What it does
 
-**Know where you stand**
-- Grades on every card and in a list, with changes since you last looked
-- GPA: unweighted, weighted and cumulative; three scales; credits, Honors/AP levels and what-if grades
-- Final exam calculator
+- **Home**: a card for every class on your Canvas dashboard, with a banner drawn for its subject, the teacher,
+  and what's due next. Change a class's color from the card's menu (saved to Canvas).
+- **Stream**: announcements and new assignments, newest first, with an Upcoming box.
+- **Classwork**: modules shown as topics, with a topic list to jump around. Expand any item for details.
+  Classes without modules are grouped by assignment group.
+- **People**: teachers and classmates.
+- **Grades** ("Your work"): every assignment with its status and score, filters for Assigned, Returned and Missing, and your overall grade.
+- **Assignment page**: instructions, then a **Your work** card where you can add a file, link or text and **Turn in**,
+  or **Mark as done** for work with nothing to hand in. **Private comments** to your teacher.
+- **To-do**: Assigned, Missing and Done across all classes, grouped by week, with a class filter.
+- **Calendar**: a week view of everything due, color-coded by class.
+- Light and dark themes, phone-friendly layout, and the browser back button works throughout.
 
-**Move faster**
-- `Ctrl/Cmd + K` search for any course page, assignment or Quad action; `Alt + Q` toggles the panel
-- Study timer (focus/break sessions)
-- **Stay on** mode: Canvas runs in a full-window frame under Quad so it keeps working as you browse
-- Settings backup and restore
+Anything Homeroom doesn't redo (quizzes, discussions, files, inbox and so on) opens in regular Canvas
+with a **Back to Homeroom** button in the corner. Every Homeroom page also has an **Open in Canvas** button.
 
 ## Install
 
-1. Open `index.html` (or the hosted install page) in your browser.
-2. Show the bookmarks bar (`Ctrl+Shift+B`, or `Cmd+Shift+B` on a Mac).
-3. Drag the yellow **Quad** button onto the bar.
-4. Go to Canvas and click **Quad**. Click it again to hide the panel.
+1. Download [`homeroom.zip`](homeroom.zip) and unzip it, or use the `extension/` folder from this repo.
+2. Open `chrome://extensions` and switch on **Developer mode** (top right).
+3. Click **Load unpacked** and pick the unzipped folder.
+4. Open your Canvas site.
 
-Can't drag? Copy the contents of `dist/bookmarklet.txt`, create a new bookmark, and paste it in as the URL.
+Homeroom runs automatically on `*.instructure.com`. If your school's Canvas has its own address
+(like `canvas.myschool.edu`), open it, click the Homeroom icon in the toolbar and choose **Use Homeroom on this site**.
+
+To switch back to plain Canvas, use the account menu (top right) › **Turn off Homeroom**, or the toolbar icon.
+
+> School-managed Chromebooks often block Developer mode and unpacked extensions. If **Load unpacked** is missing,
+> Homeroom would need to be published on the Chrome Web Store and allowed by your school.
 
 ## How it works
 
-Quad runs inside your Canvas tab and calls the Canvas REST API on the same site with your existing login.
-It has no server and sends nothing anywhere else. Settings are kept in `localStorage` for that Canvas site.
+On the pages it redoes, the content script replaces Canvas's page before Canvas's own scripts run and draws Homeroom
+instead, using the Canvas REST API with your existing login. Nothing is sent anywhere except your school's Canvas.
 
-| Feature | Canvas API |
+| Data | Canvas API |
 | --- | --- |
-| Courses, grades, nicknames | `GET /api/v1/courses`, `PUT/DELETE /api/v1/users/self/course_nicknames/:id` |
-| Course colors | `GET /api/v1/users/self/colors`, `PUT /api/v1/users/self/colors/course_:id` |
-| To-do | `GET /api/v1/planner/items`, `POST/PUT /api/v1/planner/overrides`, `POST/DELETE /api/v1/planner_notes` |
-
-A bookmarklet only runs when clicked. Without Stay on, click it once per page load. Some managed Chromebooks block
-`javascript:` bookmarks as well.
+| Classes, teachers, grades, colors | `/api/v1/courses`, `/api/v1/dashboard/dashboard_cards`, `/api/v1/users/self/colors` |
+| Stream | `/api/v1/announcements`, `/api/v1/courses/:id/assignments` |
+| Classwork | `/api/v1/courses/:id/modules`, `/api/v1/courses/:id/assignment_groups` |
+| People | `/api/v1/courses/:id/users` |
+| To-do, Calendar | `/api/v1/courses/:id/assignments?include[]=submission`, `/api/v1/planner/items` |
+| Turn in, comments, mark as done | `/api/v1/courses/:id/assignments/:id/submissions`, `/submissions/self/files`, `/api/v1/planner/overrides` |
 
 ## Develop
 
 ```bash
 npm install
-npm run build   # bundles src/ with esbuild into dist/ and writes index.html
-npm test        # unit tests + end-to-end run against a mocked Canvas in headless Chromium
+npm run build   # bundles src/ into extension/ and homeroom.zip
+npm test        # loads the extension in Chromium against a mock Canvas and clicks through every page
 ```
 
 | Path | What it is |
 | --- | --- |
-| `src/main.js` | Entry point |
-| `src/page.js`, `src/styles/page.css` | Changes to Canvas pages: theme, dark mode, cards, sidebar |
-| `src/panel.js`, `src/views.js`, `src/actions.js`, `src/styles/panel.css` | The Quad panel |
-| `src/data.js`, `src/api.js` | Canvas API calls and derived data |
-| `src/gpa.js` | Grade and GPA math |
-| `src/palette.js`, `src/timer.js`, `src/reminders.js`, `src/stayon.js` | Search, timer, reminders, stay-on mode |
-| `src/install.html` | Install page template |
+| `src/content/main.js` | Decides whether to take over a page or add the Back to Homeroom button |
+| `src/content/app.js` | App shell: top bar, menu, routing, events |
+| `src/content/views/` | One file per page |
+| `src/content/data.js`, `src/content/api.js` | Canvas API calls with a quick cache |
+| `src/content/ui.js` | Icons, avatars, generated class banners, dates |
+| `src/popup/` | Toolbar popup |
 
-Quad is an independent tool and is not affiliated with Instructure.
+The name, logo, icons and banner art are original to Homeroom. Homeroom isn't affiliated with Instructure or Google.
