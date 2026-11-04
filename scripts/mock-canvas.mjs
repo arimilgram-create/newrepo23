@@ -22,8 +22,9 @@ const courses = [
 const sub = (o = {}) => ({ workflow_state: 'unsubmitted', submitted_at: null, score: null, missing: false, late: false, attempt: null, ...o });
 const assignments = {
   1: [
+    { id: 105, name: 'Which convergence test would you use?', due_at: at(4), points_possible: 5, submission_types: ['discussion_topic'], discussion_topic: { id: 950 }, created_at: at(-2, 9), submission: sub() },
     { id: 101, name: 'Problem set 6: Series', due_at: at(2), points_possible: 25, submission_types: ['online_upload'], created_at: at(-3, 9), description: '<p>Complete problems <b>1–20</b> on page 412.</p>', submission: sub() },
-    { id: 102, name: 'Quiz 7', due_at: at(-1, 9), points_possible: 10, submission_types: ['online_quiz'], is_quiz_assignment: true, created_at: at(-6, 9), submission: sub({ workflow_state: 'graded', submitted_at: at(-1, 8), score: 9, posted_at: at(-1, 12) }) },
+    { id: 102, name: 'Quiz 7', due_at: at(-1, 9), points_possible: 10, submission_types: ['online_quiz'], is_quiz_assignment: true, quiz_id: 5, created_at: at(-6, 9), submission: sub({ workflow_state: 'graded', submitted_at: at(-1, 8), score: 9, posted_at: at(-1, 12) }) },
     { id: 103, name: 'Problem set 5: Integrals', due_at: at(-3), points_possible: 25, submission_types: ['online_upload'], created_at: at(-9, 9), submission: sub({ missing: true }) },
     { id: 104, name: 'Read section 10.3', due_at: at(1), points_possible: 0, submission_types: ['none'], created_at: at(-1, 9), submission: sub() },
   ],
@@ -43,22 +44,39 @@ const planner = () =>
   }));
 
 const announcements = [
-  { id: 900, title: 'Test on Friday', posted_at: at(-1, 8), author: { display_name: 'Dana Whitfield' }, discussion_subentry_count: 3,
+  { id: 900, is_announcement: true, title: 'Test on Friday', posted_at: at(-1, 8), author: { display_name: 'Dana Whitfield' }, discussion_subentry_count: 3,
     html_url: `${ORIGIN}/courses/1/discussion_topics/900`,
     message: '<p>Chapter 10 test this Friday. Bring a calculator.</p><script>window.pwned = 1</script><img src="x" onerror="window.pwned=2">' },
 ];
+const topics = {
+  900: { id: 900, title: 'Test on Friday', is_announcement: true, posted_at: at(-1, 8), author: { display_name: 'Dana Whitfield' },
+    message: '<p>Chapter 10 test this Friday. Bring a calculator.</p>' },
+  950: { id: 950, title: 'Which convergence test would you use?', assignment_id: 105, posted_at: at(-2, 9), author: { display_name: 'Dana Whitfield' },
+    message: '<p>Pick a series from page 430 and explain which test you would use.</p>' },
+};
+const entries = [
+  { id: 701, topic: 900, user_id: 101, message: '<p>Is it open note?</p>', created_at: at(-1, 9), replies: [{ id: 702, user_id: 70, message: '<p>One index card.</p>', created_at: at(-1, 10), replies: [] }] },
+];
+const threadView = (topic) => ({
+  participants: [{ id: 9, display_name: 'Ari Student' }, { id: 70, display_name: 'Dana Whitfield' }, { id: 101, display_name: 'Alex Rivera' }],
+  view: entries.filter((e) => e.topic === Number(topic)),
+});
+
 const modules = {
   1: [
     { id: 11, name: 'Unit 10: Infinite series', state: 'unlocked', items: [
       { id: 1, type: 'SubHeader', title: 'Week 1' },
-      { id: 2, type: 'Page', title: 'Notes: Convergence tests', html_url: `${ORIGIN}/courses/1/pages/notes` },
+      { id: 2, type: 'Page', title: 'Notes: Convergence tests', page_url: 'notes', html_url: `${ORIGIN}/courses/1/modules/items/2` },
+      { id: 8, type: 'File', title: 'Unit 10 formula sheet', content_id: 77, html_url: `${ORIGIN}/courses/1/modules/items/8` },
+      { id: 9, type: 'Discussion', title: 'Which convergence test would you use?', content_id: 950 },
+      { id: 10, type: 'ExternalTool', title: 'Practice in the math lab', html_url: `${ORIGIN}/courses/1/modules/items/10` },
       { id: 3, type: 'Assignment', title: 'Problem set 6: Series', content_id: 101 },
       { id: 4, type: 'Assignment', title: 'Read section 10.3', content_id: 104 },
       { id: 5, type: 'ExternalUrl', title: 'Desmos graphing', external_url: 'https://www.desmos.com', html_url: `${ORIGIN}/courses/1/modules/items/5` },
     ] },
     { id: 12, name: 'Unit 9: Integration review', state: 'unlocked', items: [
       { id: 6, type: 'Assignment', title: 'Problem set 5: Integrals', content_id: 103 },
-      { id: 7, type: 'Quiz', title: 'Quiz 7', content_id: 102 },
+      { id: 7, type: 'Quiz', title: 'Quiz 7', content_id: 5 },
     ] },
   ],
 };
@@ -80,12 +98,19 @@ export const route = async (r) => {
     }
     calls.push({ method, path: p, body, csrf: req.headers()['x-csrf-token'] });
   }
+  if (p === '/files/77/download') return r.fulfill({ status: 200, contentType: 'image/png', body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64') });
   if (p === '/files_api/upload') return json({ id: 777, display_name: 'work.pdf' });
   if (!p.startsWith('/api/')) {
     return r.fulfill({
       status: 200,
       contentType: 'text/html',
-      body: `<!doctype html><html class="canvas"><head><title>Canvas page</title></head><body><div id="application" class="ic-app"><h1>Canvas ${p}</h1></div>
+      body: `<!doctype html><html class="canvas"><head><title>Canvas page</title></head><body><div id="application" class="ic-app">
+          <header id="header" class="ic-app-header">Canvas global menu</header>
+          <div id="wrapper" class="ic-Layout-wrapper"><div id="breadcrumbs">Canvas breadcrumbs</div>
+          <div id="main" class="ic-Layout-columns"><div id="left-side">Canvas course menu</div>
+          <div id="content" class="ic-Layout-contentMain"><h1>Canvas ${p}</h1>
+            <a id="to-modules" href="/courses/1/modules">Modules</a> <a id="to-history" href="/courses/1/quizzes/5/history">Quiz history</a>
+          </div></div></div></div>
         <script>window.ENV = {}; window.canvasRan = true; window.ticks = 0;
           setInterval(() => { window.ticks++; }, 30);
           addEventListener('popstate', () => { window.canvasPopstate = (window.canvasPopstate || 0) + 1; });
@@ -105,6 +130,22 @@ export const route = async (r) => {
     return json(planner().filter((it) => (!cc || cc === `course_${it.course_id}`) && new Date(it.plannable_date) >= s && new Date(it.plannable_date) < e));
   }
   if (p === '/api/v1/planner/overrides') return json({ id: 55, marked_complete: true });
+  if ((m = p.match(/^\/api\/v1\/courses\/1\/discussion_topics\/(\d+)$/))) return json(topics[m[1]]);
+  if ((m = p.match(/^\/api\/v1\/courses\/1\/discussion_topics\/(\d+)\/view$/))) return json(threadView(m[1]));
+  if ((m = p.match(/^\/api\/v1\/courses\/1\/discussion_topics\/(\d+)\/entries(?:\/(\d+)\/replies)?$/))) {
+    const entry = { id: 800 + entries.length, user_id: 9, message: req.postDataJSON().message, created_at: new Date().toISOString(), replies: [] };
+    if (m[2]) entries.find((e) => e.id === Number(m[2])).replies.push(entry);
+    else entries.push({ ...entry, topic: Number(m[1]) });
+    return json(entry);
+  }
+  if (p === '/api/v1/courses/1/pages/notes') return json({ title: 'Notes: Convergence tests', body: '<h2>Ratio test</h2><p>If the limit of |a<sub>n+1</sub>/a<sub>n</sub>| is less than 1, the series converges.</p>', created_at: at(-5, 9), updated_at: at(-5, 9), last_edited_by: { display_name: 'Dana Whitfield' } });
+  if (p === '/api/v1/courses/1/quizzes/5') return json({ id: 5, title: 'Quiz 7', description: '<p>Covers sections 9.1 to 9.4.</p>', due_at: at(-1, 9), points_possible: 10, question_count: 8, time_limit: 20, allowed_attempts: 2, created_at: at(-6, 9) });
+  if (p === '/api/v1/courses/1/quizzes/5/submissions') return json({ quiz_submissions: [{ attempt: 1, score: 9, kept_score: 9, workflow_state: 'complete', finished_at: at(-1, 8) }] });
+  if (p === '/api/v1/courses/1/files/77') return json({ id: 77, display_name: 'Unit 10 formula sheet.png', 'content-type': 'image/png', size: 48211, url: `${ORIGIN}/files/77/download?verifier=abc`, created_at: at(-4, 9), updated_at: at(-4, 9) });
+  if (p === '/api/v1/courses/1/module_item_sequence') {
+    const it = modules[1].flatMap((mod) => mod.items).find((x) => String(x.id) === url.searchParams.get('asset_id'));
+    return json({ items: [{ current: it }] });
+  }
   if (p === '/api/v1/announcements') return json(url.searchParams.get('context_codes[]') === 'course_1' ? announcements : []);
   if ((m = p.match(/^\/api\/v1\/courses\/(\d+)\/assignments$/))) return json(assignments[m[1]] || []);
   if ((m = p.match(/^\/api\/v1\/courses\/(\d+)\/assignments\/(\d+)/)) && !(assignments[m[1]] || []).some((a) => a.id === Number(m[2]))) {

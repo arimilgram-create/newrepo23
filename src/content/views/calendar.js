@@ -1,6 +1,7 @@
 // Week calendar of everything due, color-coded by class.
 import { courses, planner } from '../data.js';
 import { esc, I, startOfWeek, DAY, dayDiff, time, typeIcon } from '../ui.js';
+import { framed } from '../router.js';
 
 const weekOf = (params) => {
   const w = params.get('week');
@@ -71,7 +72,7 @@ export const calendarView = async ({ params }) => {
                 const color = c ? c.color : '#5f6368';
                 const href = it.plannable_type === 'assignment' && it.course_id
                   ? `/courses/${it.course_id}/assignments/${it.plannable_id}`
-                  : it.html_url || '/calendar?hr=off';
+                  : it.html_url || framed('/calendar');
                 const done = (it.submissions && it.submissions.submitted) || (it.planner_override && it.planner_override.marked_complete);
                 return `<a class="cal-item ${done ? 'done' : ''}" href="${esc(href)}" style="--c:${esc(color)}" title="${esc((it.plannable && it.plannable.title) || '')}">
                   ${typeIcon(it.plannable_type)()}<span class="ci-title">${esc((it.plannable && it.plannable.title) || 'Untitled')}</span>

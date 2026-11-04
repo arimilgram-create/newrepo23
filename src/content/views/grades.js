@@ -1,6 +1,7 @@
 // "Your work": every assignment in a class with its status and grade.
 import { course, assignments, statusOf, self, fmtNum } from '../data.js';
 import { esc, I, avatar, dueText, typeIcon } from '../ui.js';
+import { assignmentHref, framed } from '../router.js';
 
 const FILTERS = [
   ['all', 'All'],
@@ -12,10 +13,10 @@ const FILTERS = [
 export const gradesView = async ({ courseId, params }) => {
   const [c, work, me] = await Promise.all([course(courseId), assignments(courseId), self()]);
   const filter = params.get('show') || 'all';
-  const rows = work
-    .filter((a) => a.published !== false)
-    .map((a) => ({ a, s: statusOf(a) }))
-    .filter(({ s }) => filter === 'all' || (filter === 'graded' ? s.graded : s.key === filter))
+  const all = work.filter((a) => a.published !== false).map((a) => ({ a, s: statusOf(a) }));
+  const keep = (k) => ({ s }) => k === 'all' || (k === 'graded' ? s.graded : s.key === k);
+  const rows = all
+    .filter(keep(filter))
     .sort((x, y) => new Date(y.a.due_at || y.a.created_at || 0) - new Date(x.a.due_at || x.a.created_at || 0));
 
   const overall = !c.hideGrades && c.score != null ? `${fmtNum(c.score)}%${c.grade ? ` · ${c.grade}` : ''}` : null;
@@ -33,15 +34,16 @@ export const gradesView = async ({ courseId, params }) => {
           <b>${esc(overall || '—')}</b>
         </div>
       </header>
-      <div class="chips" role="tablist" aria-label="Filter">
-        ${FILTERS.map(([k, l]) => `<a class="chip ${filter === k ? 'on' : ''}" role="tab" aria-selected="${filter === k}" href="?show=${k}">${l}</a>`).join('')}
-      </div>
+      <div class="yw-layout">
+      <nav class="yw-filters" aria-label="Show">
+        ${FILTERS.map(([k, l]) => `<a class="yw-filter ${filter === k ? 'on' : ''}" ${filter === k ? 'aria-current="true"' : ''} href="?show=${k}"><span>${l}</span><span class="n">${all.filter(keep(k)).length}</span></a>`).join('')}
+      </nav>
       <ul class="work-list">
         ${rows.length
           ? rows
               .map(({ a, s }) => `
             <li>
-              <a class="work-row" href="/courses/${esc(c.id)}/assignments/${esc(a.id)}">
+              <a class="work-row" href="${esc(assignmentHref(c.id, a))}">
                 <span class="type-dot">${typeIcon(a.is_quiz_assignment ? 'quiz' : a.discussion_topic ? 'discussion_topic' : 'assignment')()}</span>
                 <span class="wr-main">
                   <span class="wr-title">${esc(a.name)}</span>
@@ -53,7 +55,8 @@ export const gradesView = async ({ courseId, params }) => {
               .join('')
           : `<li class="muted pad">Nothing to show here.</li>`}
       </ul>
-      <p class="muted fine">Grades come straight from Canvas. <a href="/courses/${esc(c.id)}/grades?hr=off">See the full Canvas grade book</a> for weights and comments.</p>
+      </div>
+      <p class="muted fine">Grades come straight from Canvas. <a href="${esc(framed(`/courses/${c.id}/grades`))}">See the full Canvas grade book</a> for weights and comments.</p>
     </div>`;
 };
 

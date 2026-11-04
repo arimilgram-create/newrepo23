@@ -222,3 +222,77 @@ export const markDone = async (courseId, a, done) => {
   }
   invalidate('/planner/items');
 };
+
+// ---------- discussions and announcements ----------
+
+export const discussion = (courseId, id) => get(`/api/v1/courses/${courseId}/discussion_topics/${id}`);
+
+// The reply thread. Canvas hides replies until you post when the teacher asks for that.
+export const discussionThread = async (courseId, id) => {
+  try {
+    return await get(`/api/v1/courses/${courseId}/discussion_topics/${id}/view?include_new_entries=1`, { fresh: 5000 });
+  } catch (e) {
+    if (e.status === 403) return { mustPost: true, view: [], participants: [] };
+    throw e;
+  }
+};
+
+const toHtml = (text) =>
+  text
+    .split(/\n{2,}/)
+    .map((p) => `<p>${p.replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]).replace(/\n/g, '<br>')}</p>`)
+    .join('');
+
+export const postReply = async (courseId, topicId, text, parentId) => {
+  const path = parentId
+    ? `/api/v1/courses/${courseId}/discussion_topics/${topicId}/entries/${parentId}/replies`
+    : `/api/v1/courses/${courseId}/discussion_topics/${topicId}/entries`;
+  const { data } = await request(path, { method: 'POST', body: { message: toHtml(text) } });
+  invalidate(`/discussion_topics/${topicId}`);
+  return data;
+};
+
+// Flattens Canvas's nested replies into top-level comments with one level of answers, like a class comment thread.
+export const threadOf = (view) => {
+  const people = new Map((view.participants || []).map((p) => [p.id, p]));
+  const shape = (e) => {
+    const who = people.get(e.user_id) || {};
+    return {
+      id: e.id,
+      name: who.display_name || e.user_name || 'Someone',
+      avatar: who.avatar_image_url || '',
+      at: e.created_at,
+      html: e.deleted ? '' : e.message || '',
+      deleted: !!e.deleted,
+    };
+  };
+  const flat = (list, out = []) => {
+    (list || []).forEach((e) => {
+      out.push(shape(e));
+      flat(e.replies, out);
+    });
+    return out;
+  };
+  return (view.view || []).map((e) => ({ ...shape(e), replies: flat(e.replies) }));
+};
+
+// ---------- pages, quizzes, files, module items ----------
+
+export const wikiPage = (courseId, slug) =>
+  get(slug === 'front_page' ? `/api/v1/courses/${courseId}/front_page` : `/api/v1/courses/${courseId}/pages/${encodeURIComponent(slug)}`);
+
+export const quiz = (courseId, id) => get(`/api/v1/courses/${courseId}/quizzes/${id}`);
+
+export const quizAttempts = async (courseId, id) => {
+  try {
+    const data = await get(`/api/v1/courses/${courseId}/quizzes/${id}/submissions`, { fresh: 5000 });
+    return (data && data.quiz_submissions) || [];
+  } catch (e) {
+    return [];
+  }
+};
+
+export const file = (courseId, id) => get(`/api/v1/courses/${courseId}/files/${id}`);
+
+export const moduleItemSequence = (courseId, id) =>
+  get(`/api/v1/courses/${courseId}/module_item_sequence?asset_type=ModuleItem&asset_id=${id}`);

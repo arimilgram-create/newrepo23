@@ -1,13 +1,14 @@
 import { course, modules, assignments, assignmentGroups, statusOf } from '../data.js';
 import { esc, I, typeIcon, shortDate, postedText } from '../ui.js';
 import { plainText } from '../sanitize.js';
+import { hrefFor, framed, assignmentHref } from '../router.js';
 
 const ASSIGNABLE = new Set(['Assignment', 'Quiz', 'Discussion']);
 
 const itemRow = (c, it, a) => {
   const isWork = ASSIGNABLE.has(it.type) || !!a;
   const due = (a && a.due_at) || (it.content_details && it.content_details.due_at);
-  const href = a ? `/courses/${c.id}/assignments/${a.id}` : `${it.html_url || it.external_url || '#'}`;
+  const href = a ? assignmentHref(c.id, a) : hrefFor(c.id, it.type, it);
   const native = !a;
   const status = a ? statusOf(a) : null;
   const locked = it.content_details && it.content_details.locked_for_user;
@@ -27,7 +28,7 @@ const itemRow = (c, it, a) => {
         </div>
         ${a && a.description ? `<p class="cw-desc">${esc(plainText(a.description))}</p>` : ''}
         <a class="text-btn" href="${esc(href)}" ${native && it.type === 'ExternalUrl' ? 'target="_blank" rel="noopener"' : ''}>
-          ${a ? 'View instructions' : it.type === 'ExternalUrl' ? 'Open link' : 'Open'}
+          ${a ? 'View instructions' : it.type === 'ExternalUrl' ? 'Open link' : 'View material'}
         </a>
       </div>
     </li>`;
@@ -79,7 +80,7 @@ export const classworkView = async ({ courseId }) => {
       <div class="cw-actions">
         <a class="pill-btn" href="/courses/${esc(c.id)}/grades">${I.grades()} View your work</a>
         <a class="pill-btn" href="/calendar?course=${esc(c.id)}">${I.calendar()} Calendar</a>
-        <a class="pill-btn" href="/courses/${esc(c.id)}/files?hr=off">${I.folder()} Class files</a>
+        <a class="pill-btn" href="${esc(framed(`/courses/${c.id}/files`))}">${I.folder()} Class files</a>
       </div>
       <div class="cw-layout">
         ${topics.length > 1 ? `

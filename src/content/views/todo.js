@@ -1,6 +1,7 @@
 // To-do across every class: Assigned, Missing and Done, grouped by when things are due.
 import { allAssignments, courses, statusOf } from '../data.js';
 import { esc, I, dueText, startOfWeek, DAY, typeIcon, shortDate } from '../ui.js';
+import { assignmentHref } from '../router.js';
 
 export const TODO_TABS = [
   ['assigned', 'Assigned'],
@@ -89,8 +90,8 @@ export const todoView = async ({ hash, params }) => {
           <ul class="tg-list">
             ${items.map((a) => {
               const s = statusOf(a, now.getTime());
-              return `<li><a class="todo-row" href="/courses/${esc(a.course.id)}/assignments/${esc(a.id)}" style="--c:${esc(a.course.color)}">
-                <span class="type-dot">${typeIcon(a.is_quiz_assignment ? 'quiz' : 'assignment')()}</span>
+              return `<li><a class="todo-row" href="${esc(assignmentHref(a.course.id, a))}" style="--c:${esc(a.course.color)}">
+                <span class="type-dot">${typeIcon(a.is_quiz_assignment ? 'quiz' : a.discussion_topic ? 'discussion_topic' : 'assignment')()}</span>
                 <span class="tr-main"><span class="tr-title">${esc(a.name)}</span><span class="tr-class">${esc(a.course.name)}</span>
                   <span class="tr-due">${esc(tab === 'done' && a.submission && a.submission.submitted_at ? `Turned in ${shortDate(new Date(a.submission.submitted_at))}` : dueText(a.due_at))}</span></span>
                 ${tab === 'done' ? `<span class="status ${s.cls}">${esc(s.label)}</span>` : ''}

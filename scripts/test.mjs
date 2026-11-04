@@ -53,14 +53,17 @@ await check('home: class cards replace Canvas', async () => {
   await shot('1-home');
 });
 
-await check('drawer lists every class and the to-do', async () => {
-  await page.locator('[data-act=drawer]').click();
-  await page.locator('.drawer.open').waitFor();
+await check('side menu stays docked on wide screens and folds to icons', async () => {
+  assert.equal(await page.evaluate(() => document.body.classList.contains('docked')), true);
+  await page.locator('.drawer .dr-item.class').first().waitFor();
   assert.equal(await page.locator('.drawer .dr-item.class').count(), 4);
   assert.equal(await page.locator('.drawer .dr-item', { hasText: 'To-do' }).count(), 1);
+  await page.locator('[data-act=drawer]').click();
+  assert.equal(await page.evaluate(() => document.body.classList.contains('rail')), true);
   await page.waitForTimeout(250);
-  await shot('2-drawer');
-  await page.keyboard.press('Escape');
+  await shot('2-rail');
+  await page.locator('[data-act=drawer]').click();
+  assert.equal(await page.evaluate(() => document.body.classList.contains('rail')), false);
 });
 
 await check('stream', async () => {
@@ -76,6 +79,17 @@ await check('stream', async () => {
   assert.ok((await page.locator('.post-mini').count()) >= 3);
   assert.equal(await page.evaluate(() => window.canvasRan), undefined, 'moved without reloading');
   await shot('3-stream');
+});
+
+await check('class comments on the stream', async () => {
+  await page.locator('.post .comments-link').click();
+  await page.locator('.post .comment', { hasText: 'Is it open note?' }).waitFor();
+  assert.match(await page.locator('.post .replies').textContent(), /One index card/);
+  await page.locator('.post .comment-form input').last().fill('Thanks!');
+  await page.locator('.post .comment-form input').last().press('Enter');
+  await page.locator('.post .comment', { hasText: 'Thanks!' }).waitFor();
+  assert.deepEqual(calls.at(-1), { method: 'POST', path: '/api/v1/courses/1/discussion_topics/900/entries', body: { message: '<p>Thanks!</p>' }, csrf: 'tok+en/=' });
+  await shot('3b-stream-comments');
 });
 
 await check('classwork with topics', async () => {
@@ -114,7 +128,8 @@ await check('grades / your work', async () => {
   assert.equal(await page.locator('.yw-overall b').textContent(), '91.24% · A-');
   assert.match(await page.locator('.work-row', { hasText: 'Quiz 7' }).textContent(), /9\/10/);
   await shot('6-grades');
-  await page.locator('.chip', { hasText: 'Missing' }).click();
+  assert.match(await page.locator('.yw-filter', { hasText: 'Missing' }).textContent(), /1/);
+  await page.locator('.yw-filter', { hasText: 'Missing' }).click();
   await page.waitForURL(/show=missing/);
   await page.waitForFunction(() => document.querySelectorAll('.work-row').length === 1);
   assert.match(await page.locator('.work-row').textContent(), /Problem set 5/);
@@ -230,18 +245,88 @@ await check('back button', async () => {
   assert.equal(new URL(page.url()).pathname, '/courses/1');
 });
 
-await check('pages Homeroom doesn’t redo stay Canvas, with a way back', async () => {
-  await page.goto(ORIGIN + '/courses/1/discussion_topics', { waitUntil: 'commit' });
-  await page.locator('#homeroom-pill').waitFor();
-  assert.equal(await page.evaluate(() => window.canvasRan), true);
-  const pill = page.locator('#homeroom-pill a');
-  assert.match(await pill.textContent(), /Back to Homeroom/);
-  assert.equal(await pill.getAttribute('href'), '/courses/1');
-  await pill.click();
-  await page.locator('.hero h1').waitFor();
+await check('announcement page with class comments', async () => {
+  await page.goto(ORIGIN + '/courses/1/discussion_topics/900', { waitUntil: 'commit' });
+  await page.locator('.post-title.big').waitFor();
+  await page.locator('.comment', { hasText: 'Is it open note?' }).waitFor();
+  await page.locator('.comment [data-act=reply-to]').first().click();
+  await page.locator('.reply-slot input').fill('Same question');
+  await page.locator('.reply-slot input').press('Enter');
+  await page.locator('.replies .comment', { hasText: 'Same question' }).waitFor();
+  assert.equal(calls.at(-1).path, '/api/v1/courses/1/discussion_topics/900/entries/701/replies');
+  assert.equal(await page.locator('.tab.on').textContent(), 'Classwork');
+  await shot('17-announcement');
+});
+
+await check('graded discussion: assignment link opens the discussion', async () => {
+  await page.goto(ORIGIN + '/courses/1/assignments/105', { waitUntil: 'commit' });
+  await page.waitForURL(`${ORIGIN}/courses/1/discussion_topics/950`);
+  await page.locator('.as-titles h1', { hasText: 'Which convergence test' }).waitFor();
+  assert.match(await page.locator('.work-card').textContent(), /Assigned[\s\S]*Post a reply/);
+  await page.locator('.thread .comment-form input').fill('The ratio test, because of the factorial.');
+  await page.locator('.thread .comment-form input').press('Enter');
+  await page.locator('.comment', { hasText: 'ratio test' }).waitFor();
+  assert.equal(calls.at(-1).path, '/api/v1/courses/1/discussion_topics/950/entries');
+  await shot('18-discussion');
+});
+
+await check('quiz page, then the quiz itself inside Homeroom', async () => {
+  await page.goto(ORIGIN + '/courses/1/grades', { waitUntil: 'commit' });
+  await page.locator('.work-row', { hasText: 'Quiz 7' }).click();
+  await page.waitForURL(`${ORIGIN}/courses/1/quizzes/5`);
+  await page.locator('.facts').waitFor();
+  assert.match(await page.locator('.facts').textContent(), /8 questions[\s\S]*20 minute[\s\S]*2 attempts/);
+  assert.equal(await page.locator('.wc-head .status').textContent(), '9/10');
+  assert.match(await page.locator('.attempts').textContent(), /Attempt 1/);
+  await shot('19-quiz');
+  await page.locator('.work-card a', { hasText: 'Take again' }).click();
+  await page.waitForURL(/\/courses\/1\/quizzes\/5\?hr=frame/);
+  const frame = page.frameLocator('.canvas-frame');
+  await frame.locator('h1').waitFor();
+  assert.match(await frame.locator('h1').textContent(), /Canvas \/courses\/1\/quizzes\/5/);
+  // Canvas's own menus are hidden; Homeroom's top bar and class tabs stay.
+  assert.equal(await frame.locator('#header').isHidden(), true);
+  assert.equal(await frame.locator('#left-side').isHidden(), true);
+  assert.equal(await frame.locator('#breadcrumbs').isHidden(), true);
+  assert.equal(await page.locator('.tab', { hasText: 'Classwork' }).count(), 1);
+  assert.equal(await page.evaluate(() => window.canvasRan), undefined, 'the tab itself is still Homeroom');
+  await shot('20-frame');
+  // A Canvas page Homeroom doesn't redraw stays in the frame, and the address bar follows it.
+  await frame.locator('#to-history').click();
+  await page.waitForURL(/\/courses\/1\/quizzes\/5\/history\?hr=frame/);
+  // A link to a page Homeroom redraws comes back out to Homeroom.
+  await page.frameLocator('.canvas-frame').locator('#to-modules').click();
+  await page.waitForURL(`${ORIGIN}/courses/1/modules`);
+  await page.locator('.topic-title').first().waitFor();
+});
+
+await check('pages, files and module links open as Homeroom pages', async () => {
+  const row = page.locator('.cw-item', { hasText: 'Notes: Convergence tests' });
+  await row.locator('.cw-row').click();
+  await row.locator('.cw-detail a', { hasText: 'View material' }).click();
+  await page.waitForURL(`${ORIGIN}/courses/1/pages/notes`);
+  await page.locator('.as-body h2', { hasText: 'Ratio test' }).waitFor();
+  await shot('21-page');
+  await page.goto(ORIGIN + '/courses/1/modules/items/8', { waitUntil: 'commit' });
+  await page.waitForURL(`${ORIGIN}/courses/1/files/77`);
+  await page.locator('.file-image').waitFor();
+  await page.waitForFunction(() => { const i = document.querySelector('.file-image'); return i && i.complete && i.naturalWidth > 0; });
+  assert.match(await page.locator('.file-actions a', { hasText: 'Download' }).getAttribute('href'), /download_frd=1/);
+  await page.goto(ORIGIN + '/courses/1/modules/items/10', { waitUntil: 'commit' });
+  await page.locator('.canvas-frame').waitFor();
+  assert.match(page.url(), /modules\/items\/10\?hr=frame/);
+});
+
+await check('Canvas pages Homeroom doesn’t redraw open inside it', async () => {
+  await page.locator('.drawer .dr-item', { hasText: 'Inbox' }).click();
+  await page.waitForURL(/\/conversations\?hr=frame/);
+  await page.frameLocator('.canvas-frame').locator('h1', { hasText: '/conversations' }).waitFor();
+  assert.match(await page.locator('.tb-title').textContent(), /Homeroom/);
 });
 
 await check('open in Canvas, then switch back', async () => {
+  await page.goto(ORIGIN + '/courses/1', { waitUntil: 'commit' });
+  await page.locator('.hero h1').waitFor();
   await page.locator('[data-canvas-link]').click();
   await page.waitForURL(/hr=off/);
   await page.locator('#homeroom-pill').waitFor();

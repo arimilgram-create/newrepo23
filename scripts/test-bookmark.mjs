@@ -38,13 +38,12 @@ await check('the bookmark is a single valid javascript: URL', async () => {
   assert.equal(decodeURIComponent(bookmarklet.slice('javascript:'.length)), code.trim());
 });
 
-await check('clicking it on a Canvas-only page opens that class in Homeroom', async () => {
+await check('clicking it on a Canvas quiz page opens that quiz in Homeroom', async () => {
   await page.goto(`${ORIGIN}/courses/1/quizzes/5`);
   await page.waitForFunction(() => window.ticks > 2);
   await click();
-  await page.locator('.hero h1').waitFor();
-  assert.equal(new URL(page.url()).pathname, '/courses/1');
-  assert.equal(await page.locator('.hero h1').textContent(), 'AP Calculus BC');
+  await page.locator('.as-titles h1', { hasText: 'Quiz 7' }).waitFor();
+  assert.equal(new URL(page.url()).pathname, '/courses/1/quizzes/5');
   assert.equal(await page.title(), 'AP Calculus BC – Homeroom');
 });
 
@@ -56,7 +55,7 @@ await check('Canvas’s own scripts are quieted', async () => {
   await page.locator('.topic-title').first().waitFor();
   assert.equal(await page.evaluate(() => window.canvasClicks), undefined, 'Canvas click handlers removed');
   await page.goBack({ waitUntil: 'commit' });
-  await page.locator('.hero h1').waitFor();
+  await page.locator('.facts').waitFor();
   assert.equal(await page.evaluate(() => window.canvasPopstate), undefined, 'Canvas history handlers bypassed');
 });
 
@@ -87,17 +86,28 @@ await check('turning in work uses your Canvas login', async () => {
   assert.equal(done.csrf, 'tok+en/=');
 });
 
-await check('Canvas-only pages open in a new tab and Homeroom stays put', async () => {
+await check('quizzes and other Canvas pages open inside Homeroom, in the same tab', async () => {
+  await page.evaluate(() => (window.__sameDoc = 2));
   await page.goto(`${ORIGIN}/courses/1`, { waitUntil: 'commit' }).catch(() => {});
   await page.waitForFunction(() => window.ENV);
   await click();
   await page.locator('.post').first().waitFor();
-  const [tab] = await Promise.all([ctx.waitForEvent('page'), page.locator('.comments-link').first().click()]);
+  await page.evaluate(() => (window.__sameDoc = 3));
+  await page.locator('.tab', { hasText: 'Classwork' }).click();
+  await page.locator('.cw-item', { hasText: 'Quiz 7' }).locator('.cw-row').click();
+  await page.locator('.cw-item', { hasText: 'Quiz 7' }).locator('.cw-detail a').click();
+  await page.locator('.work-card a', { hasText: 'View results' }).click();
+  await page.frameLocator('.canvas-frame').locator('h1').waitFor();
+  assert.equal(await page.frameLocator('.canvas-frame').locator('#header').isHidden(), true);
+  assert.equal(await page.evaluate(() => window.__sameDoc), 3, 'never left the Homeroom tab');
+  // Only "regular Canvas" links open a new tab.
+  await page.locator('[data-act=account]').first().click();
+  const [tab] = await Promise.all([ctx.waitForEvent('page'), page.locator('.popover a', { hasText: 'regular Canvas' }).click()]);
   await tab.waitForLoadState();
-  assert.match(tab.url(), /\/courses\/1\/discussion_topics\/900/);
   assert.equal(await tab.evaluate(() => window.canvasRan), true);
   await tab.close();
-  assert.equal(await page.locator('.hero h1').count(), 1, 'Homeroom tab unchanged');
+  await page.keyboard.press('Escape');
+  await page.locator('[data-act=drawer]').click().catch(() => {});
 });
 
 await check('clicking the bookmark again goes back to regular Canvas', async () => {
@@ -107,7 +117,7 @@ await check('clicking the bookmark again goes back to regular Canvas', async () 
   await Promise.all([page.waitForEvent('load'), click()]);
   assert.equal(await page.evaluate(() => window.canvasRan), true);
   assert.equal(await page.locator('#hr-main').count(), 0);
-  assert.equal(new URL(page.url()).pathname, '/courses/1');
+  assert.equal(new URL(page.url()).pathname, '/courses/1/quizzes/5');
 });
 
 await check('refuses to run off Canvas', async () => {

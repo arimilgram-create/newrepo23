@@ -90,6 +90,7 @@ export const I = {
   text: icon('<path d="M5 6h14M5 10h14M5 14h9M5 18h6"/>'),
   event: icon('<rect x="4" y="5.5" width="16" height="14" rx="2"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/><circle cx="12" cy="14.5" r="1.6" fill="currentColor"/>'),
   note: icon('<path d="M6 4h12v16l-6-4-6 4z"/>'),
+  yourWork: icon('<rect x="4" y="4" width="16" height="16" rx="2.5"/><path d="m7.5 15 3-3.5 2.5 2 3.5-4.5"/>'),
 };
 
 export const LOGO = (size = 28) => `

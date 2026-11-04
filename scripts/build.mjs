@@ -68,7 +68,7 @@ const img = async (name) => {
 const body = (await readFile(`${root}src/install.html`, 'utf8'))
   .replace('{{BOOKMARKLET}}', () => escapeHtml(bookmarklet))
   .replace('{{BOOKMARKLET_TEXT}}', () => escapeHtml(bookmarklet))
-  .replace('{{IMG_HOME}}', await img('1-home'))
+  .replace('{{IMG_HOME}}', await img('3b-stream-comments'))
   .replace('{{IMG_CLASSWORK}}', await img('4-classwork'))
   .replace('{{IMG_ASSIGNMENT}}', await img('7-assignment'));
 const split = body.indexOf('<div class="wrap">');

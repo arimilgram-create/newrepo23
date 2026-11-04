@@ -1,4 +1,6 @@
-import { course, announcements, assignments, statusOf } from '../data.js';
+import { course, announcements, assignments, statusOf, self } from '../data.js';
+import { assignmentHref } from '../router.js';
+import { composer } from './detail.js';
 import { esc, I, avatar, banner, friendlyDay, postedText, DAY } from '../ui.js';
 import { clean } from '../sanitize.js';
 
@@ -14,13 +16,13 @@ const upcomingCard = (c, list) => {
       <h2>Upcoming</h2>
       ${soon.length
         ? soon.map((a) => `<p class="up-due">Due ${esc(friendlyDay(new Date(a.due_at)))}</p>
-            <a class="up-link" href="/courses/${esc(c.id)}/assignments/${esc(a.id)}">${esc(a.name)}</a>`).join('')
+            <a class="up-link" href="${esc(assignmentHref(c.id, a))}">${esc(a.name)}</a>`).join('')
         : '<p class="muted">Woohoo, no work due soon!</p>'}
       <a class="text-btn" href="/courses/${esc(c.id)}/modules">View all</a>
     </aside>`;
 };
 
-const announcementPost = (p) => {
+const announcementPost = (c, p, me) => {
   const author = (p.author && p.author.display_name) || p.user_name || 'Teacher';
   const replies = p.discussion_subentry_count || 0;
   return `
@@ -32,27 +34,30 @@ const announcementPost = (p) => {
           <div class="post-date">${esc(postedText(p.posted_at || p.created_at))}</div>
         </div>
       </header>
-      ${p.title ? `<h3 class="post-title">${esc(p.title)}</h3>` : ''}
+      ${p.title ? `<h3 class="post-title"><a href="/courses/${esc(c.id)}/discussion_topics/${esc(p.id)}">${esc(p.title)}</a></h3>` : ''}
       <div class="post-body rich clamp" data-clamp>${clean(p.message)}</div>
       <button class="text-btn more-btn" data-act="unclamp" hidden>Read more</button>
-      <footer class="post-foot">
-        <a class="comments-link" href="${esc(p.html_url)}?hr=off">${I.people()} ${replies ? `${replies} class comment${replies === 1 ? '' : 's'}` : 'Add class comment'}</a>
+      <footer class="post-foot thread-foot">
+        <section class="thread" data-thread="${esc(c.id)}:${esc(p.id)}" data-label="class comment" data-can-reply="${!p.locked}">
+          ${replies ? `<button class="comments-link" data-act="thread-open">${I.people()} ${replies} class comment${replies === 1 ? '' : 's'}</button>` : ''}
+          ${p.locked ? '' : composer(me)}
+        </section>
       </footer>
     </article>`;
 };
 
 const assignmentPost = (c, a) => `
-  <a class="card post-mini" href="/courses/${esc(c.id)}/assignments/${esc(a.id)}">
-    <span class="type-dot">${I.assignment()}</span>
-    <span class="pm-text">${esc(c.teacher || 'Your teacher')} posted a new assignment: <b>${esc(a.name)}</b></span>
+  <a class="card post-mini" href="${esc(assignmentHref(c.id, a))}">
+    <span class="type-dot">${a.is_quiz_assignment ? I.quiz() : a.discussion_topic ? I.discussion() : I.assignment()}</span>
+    <span class="pm-text">${esc(c.teacher || 'Your teacher')} posted a new ${a.is_quiz_assignment ? 'quiz' : a.discussion_topic ? 'question' : 'assignment'}: <b>${esc(a.name)}</b></span>
     <span class="pm-date">${esc(postedText(a.unlock_at || a.created_at))}</span>
   </a>`;
 
 export const streamView = async ({ courseId }) => {
-  const [c, posts, work] = await Promise.all([course(courseId), announcements(courseId), assignments(courseId)]);
+  const [c, posts, work, me] = await Promise.all([course(courseId), announcements(courseId), assignments(courseId), self()]);
   const now = Date.now();
   const feed = [
-    ...posts.map((p) => ({ at: new Date(p.posted_at || p.created_at).getTime(), html: announcementPost(p) })),
+    ...posts.map((p) => ({ at: new Date(p.posted_at || p.created_at).getTime(), html: announcementPost(c, p, me) })),
     ...work
       .filter((a) => a.published !== false && new Date(a.unlock_at || a.created_at).getTime() <= now)
       .map((a) => ({ at: new Date(a.unlock_at || a.created_at).getTime(), html: assignmentPost(c, a) })),

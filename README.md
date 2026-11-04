@@ -27,8 +27,15 @@ all come straight from Canvas.
 - **Calendar**: a week view of everything due, color-coded by class.
 - Light and dark themes, phone-friendly layout, and the browser back button works throughout.
 
-Anything Homeroom doesn't redo (quizzes, discussions, files, inbox and so on) opens in regular Canvas
-with a **Back to Homeroom** button in the corner. Every Homeroom page also has an **Open in Canvas** button.
+- **Discussions and announcements** with class comments you can read, reply to and post, right on the Stream too.
+- **Quizzes**: details, your attempts and score, and **Start quiz / Take again / View results**.
+- **Pages and files** shown as class materials, with image previews and downloads.
+- **A side menu** that stays docked on wide screens and folds to icons, plus a "Homeroom › Class" breadcrumb.
+
+**Everything stays in Homeroom.** Canvas pages Homeroom doesn't redraw itself (taking a quiz, the inbox,
+external tools, settings…) open inside Homeroom: the real Canvas page in a frame, with Canvas's own menus hidden,
+under Homeroom's top bar and side menu. The address bar keeps up, and links back to classes, Classwork and so on
+return to Homeroom's own pages. Only **Open in regular Canvas** opens a new tab.
 
 ## Install (bookmark, no extension needed)
 
@@ -41,7 +48,7 @@ Can't drag? Copy the contents of [`dist/bookmarklet.txt`](dist/bookmarklet.txt),
 
 How the bookmark behaves:
 - Moving around Homeroom stays in the same tab without reloading, and the back button works.
-- Pages Homeroom doesn't redo (quizzes, discussions, files…) open in a new tab of regular Canvas, so Homeroom stays open.
+- Quizzes, discussions, pages, files and every other Canvas page open inside Homeroom, in the same tab.
 - Reloading brings regular Canvas back; click the bookmark again to return. Clicking it while Homeroom is open also goes back to Canvas.
 - Some school-managed Chromebooks block bookmarks like this. If clicking does nothing, that's why.
 
@@ -81,7 +88,7 @@ npm test        # runs both versions in Chromium against a mock Canvas (scripts/
 | `src/content/main.js` | Extension entry point: takes over a page or adds the Back to Homeroom button |
 | `src/install.html` | Install page template (the drag button) |
 | `src/content/app.js` | App shell: top bar, menu, routing, events |
-| `src/content/views/` | One file per page |
+| `src/content/views/` | One file per page; `frame.js` shows any other Canvas page inside Homeroom |
 | `src/content/data.js`, `src/content/api.js` | Canvas API calls with a quick cache |
 | `src/content/ui.js` | Icons, avatars, generated class banners, dates |
 | `src/popup/` | Toolbar popup |

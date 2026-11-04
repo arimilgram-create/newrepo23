@@ -2,6 +2,7 @@
 import { course, assignment, submission, statusOf, turnIn, comment, markDone, plannerOverride, fmtNum } from '../data.js';
 import { esc, I, avatar, dueText, postedText, typeIcon } from '../ui.js';
 import { clean } from '../sanitize.js';
+import { assignmentHref, framed } from '../router.js';
 
 const SUBMITTABLE = ['online_upload', 'online_url', 'online_text_entry'];
 const LABEL = { online_upload: 'File', online_url: 'Link', online_text_entry: 'Text' };
@@ -43,8 +44,8 @@ const workCard = () => {
   if (lockedOut) {
     body += `<p class="muted">${esc(a.lock_explanation ? a.lock_explanation.replace(/<[^>]+>/g, '') : 'This assignment is locked.')}</p>`;
   } else if (external) {
-    body += `<a class="btn filled block" href="${esc(a.html_url)}?hr=off">Open in Canvas</a>
-      <p class="muted small">This kind of work (${esc((a.submission_types || []).join(', ').replace(/_/g, ' '))}) is done in Canvas.</p>`;
+    body += `<a class="btn filled block" href="${esc(framed(new URL(a.html_url, location.origin).pathname))}">Open</a>
+      <p class="muted small">Opens your teacher’s ${esc((a.submission_types || []).includes('external_tool') ? 'tool' : 'activity')} right here.</p>`;
   } else if (!types.length) {
     body += `<button class="btn ${done ? 'outlined' : 'filled'} block" data-act="mark-done" ${d.busy ? 'disabled' : ''}>${done ? 'Unmark as done' : 'Mark as done'}</button>`;
   } else if (!turnedIn || attemptsLeft) {
@@ -98,7 +99,11 @@ export const renderSide = (root) => {
 };
 
 export const assignmentView = async ({ courseId, assignmentId }) => {
-  const [c, a, sub] = await Promise.all([course(courseId), assignment(courseId, assignmentId), submission(courseId, assignmentId).catch(() => ({}))]);
+  const a0 = await assignment(courseId, assignmentId);
+  // Quizzes and graded discussions have their own pages.
+  const own = assignmentHref(courseId, a0);
+  if (own !== `/courses/${courseId}/assignments/${a0.id}`) return { redirect: own };
+  const [c, a, sub] = await Promise.all([course(courseId), a0, submission(courseId, assignmentId).catch(() => ({}))]);
   const needsNothing = !(a.submission_types || []).some((t) => !['none', 'on_paper', 'not_graded'].includes(t));
   const override = needsNothing ? await plannerOverride(courseId, a).catch(() => null) : null;
   current = { course: c, assignment: a, submission: sub || {}, done: !!(override && override.marked_complete) };
@@ -119,7 +124,7 @@ export const assignmentView = async ({ courseId, assignmentId }) => {
           </div>
         </header>
         <div class="as-body rich">${a.description ? clean(a.description) : '<p class="muted">No instructions.</p>'}</div>
-        <p class="fine"><a href="${esc(a.html_url)}?hr=off">${I.external()} Open this assignment in Canvas</a></p>
+        <p class="fine"><a href="${esc(new URL(a.html_url, location.origin).pathname)}?hr=off" target="_blank" rel="noopener">${I.external()} Open in regular Canvas</a></p>
       </article>
       <aside class="as-side" data-side>${workCard()}${commentsCard()}</aside>
     </div>`;

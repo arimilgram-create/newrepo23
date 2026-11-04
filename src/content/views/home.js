@@ -1,5 +1,6 @@
 import { courses, planner } from '../data.js';
 import { esc, I, avatar, banner, friendlyDay, DAY } from '../ui.js';
+import { framed } from '../router.js';
 
 const upcomingByCourse = async () => {
   const now = new Date();
@@ -43,8 +44,8 @@ const card = (c, due) => {
         : ''}
     </div>
     <div class="cc-foot">
-      <a class="icon-btn" href="/courses/${esc(c.id)}/grades" title="Your work for ${esc(c.name)}" aria-label="Your work for ${esc(c.name)}">${I.grades()}</a>
-      <a class="icon-btn" href="/courses/${esc(c.id)}/files?hr=off" title="Class files" aria-label="Files for ${esc(c.name)}">${I.folder()}</a>
+      <a class="icon-btn" href="/courses/${esc(c.id)}/grades" title="Open your work for “${esc(c.name)}”" aria-label="Open your work for ${esc(c.name)}">${I.yourWork()}</a>
+      <a class="icon-btn" href="${esc(framed(`/courses/${c.id}/files`))}" title="Open folder for “${esc(c.name)}”" aria-label="Open folder for ${esc(c.name)}">${I.folder()}</a>
     </div>
   </li>`;
 };
